@@ -65,10 +65,11 @@ describe("ingest workflow", () => {
       })
     );
     const cache = await import("next/cache");
+    vi.mocked(cache.revalidateTag).mockClear();
 
     await runIngestWorkflow("https://example.com/tagcheck");
 
-    const call = (cache.revalidateTag as unknown as { mock: { calls: unknown[][] } }).mock.calls.find(
+    const call = vi.mocked(cache.revalidateTag).mock.calls.find(
       (args) => args[0] === "topic:ai-industry"
     );
     expect(call).toBeDefined();
