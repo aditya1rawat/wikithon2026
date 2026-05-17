@@ -9,14 +9,24 @@ export interface NormalizedSource {
 }
 
 const DEFAULT_TEXT_LIMIT = 48_000;
+const FETCH_TIMEOUT_MS = 15_000;
+const DEFAULT_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 ConsensusWiki/0.1";
 
 export async function normalizeUrl(url: string): Promise<NormalizedSource> {
   let response: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    response = await fetch(url);
+    response = await fetch(url, {
+      headers: { "User-Agent": DEFAULT_UA, accept: "text/html,application/xhtml+xml" },
+      signal: controller.signal,
+    });
   } catch {
+    clearTimeout(timer);
     return normalizeViaJina(url);
   }
+  clearTimeout(timer);
   if (!response.ok) {
     if (response.status === 403 || response.status === 429 || response.status >= 500) return normalizeViaJina(url);
     throw new Error(`Fetch failed: ${response.status}`);

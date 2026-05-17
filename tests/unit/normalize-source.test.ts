@@ -38,4 +38,21 @@ describe("source normalization", () => {
     expect(normalized.title).toBe("Jina title");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  test("sends realistic UA and aborts on timeout", async () => {
+    const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const ua = (init.headers as Record<string, string>)?.["User-Agent"] ?? "";
+      expect(ua).toMatch(/Mozilla\/5\.0/);
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: async () => "<html><head><title>X</title></head><body><article><p>body</p></article></body></html>",
+      } as Response);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await normalizeUrl("https://example.com/x");
+    expect(fetchMock).toHaveBeenCalled();
+  });
 });
