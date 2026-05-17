@@ -389,10 +389,18 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
     },
     async upsertEntityWithAliases(input) {
       await ensureDemoTopic(input.entity.topicId);
+      const existingRows = await sql`
+        SELECT id, topic_id, canonical_name, entity_type, hydra_entity_id, first_seen
+        FROM entities
+        WHERE topic_id = ${input.entity.topicId}
+          AND canonical_name = ${input.entity.canonicalName}
+        LIMIT 1
+      `;
+      const targetId = existingRows[0] ? String(existingRows[0].id) : input.entity.id;
       const rows = await sql`
         INSERT INTO entities (id, topic_id, canonical_name, entity_type, hydra_entity_id, first_seen)
         VALUES (
-          ${input.entity.id},
+          ${targetId},
           ${input.entity.topicId},
           ${input.entity.canonicalName},
           ${input.entity.entityType},

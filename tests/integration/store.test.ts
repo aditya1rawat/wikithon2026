@@ -31,6 +31,41 @@ describe("memory store fallback", () => {
     expect(after?.hydraStatus).toBe("in_progress");
   });
 
+  test("upsertEntityWithAliases collapses different ids with same canonical name", async () => {
+    const store = createMemoryStore({ seedDemoData: false });
+    await store.upsertTopic(demoTopic);
+
+    const first = await store.upsertEntityWithAliases({
+      entity: {
+        id: "gpt-5",
+        topicId: demoTopic.id,
+        canonicalName: "GPT-5",
+        entityType: "MODEL",
+        hydraEntityId: null,
+        firstSeen: "2026-05-17T00:00:00.000Z",
+      },
+      aliases: ["GPT-5"],
+    });
+
+    const second = await store.upsertEntityWithAliases({
+      entity: {
+        id: "gpt5",
+        topicId: demoTopic.id,
+        canonicalName: "GPT-5",
+        entityType: "MODEL",
+        hydraEntityId: "hydra-gpt-5",
+        firstSeen: "2026-05-17T01:00:00.000Z",
+      },
+      aliases: ["gpt5"],
+    });
+
+    expect(second.id).toBe(first.id);
+    expect(second.hydraEntityId).toBe("hydra-gpt-5");
+
+    const page = await store.getEntityPage("gpt5");
+    expect(page?.entity.id).toBe(first.id);
+  });
+
   test("upserts ingest data idempotently without a database", async () => {
     const store = createMemoryStore({ seedDemoData: false });
     await store.upsertTopic(demoTopic);

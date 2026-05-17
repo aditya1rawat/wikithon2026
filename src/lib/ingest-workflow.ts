@@ -204,7 +204,7 @@ function topicFor(topicId?: string): Topic {
 
 async function ensureEntity(input: { raw: string; canonicalName: string; entityType: Entity["entityType"]; topic: Topic }) {
   const existing = (await store.findEntityByAlias(input.canonicalName, input.topic.id)) ?? (await store.findEntityByAlias(input.raw, input.topic.id));
-  const entity: Entity =
+  const seed: Entity =
     existing ??
     ({
       id: slugify(input.canonicalName),
@@ -215,8 +215,10 @@ async function ensureEntity(input: { raw: string; canonicalName: string; entityT
       firstSeen: new Date().toISOString(),
     } satisfies Entity);
 
-  await store.upsertEntityWithAliases({ entity: { ...entity, topicId: input.topic.id }, aliases: [input.raw, input.canonicalName] });
-  return { ...entity, topicId: input.topic.id };
+  return store.upsertEntityWithAliases({
+    entity: { ...seed, topicId: input.topic.id },
+    aliases: [input.raw, input.canonicalName],
+  });
 }
 
 async function safeUpsertSource(source: Source) {
