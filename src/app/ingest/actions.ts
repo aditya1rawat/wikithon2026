@@ -1,6 +1,6 @@
 "use server";
 
-import { getSource, registerDemoIngest, updateSourceStatus } from "@/lib/app-service";
+import { getSource, registerDemoIngest, updateSourceWorkflowStatus } from "@/lib/app-service";
 import { runIngestWorkflow } from "@/lib/ingest-workflow";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -14,7 +14,9 @@ export async function ingestSource(formData: FormData) {
         await runIngestWorkflow(url);
       } catch {
         const latest = await getSource(source.id);
-        if (!latest || latest.hydraStatus === "queued" || latest.hydraStatus === "in_progress") await updateSourceStatus(source.id, "failed_fetch");
+        if (!latest || latest.workflowStatus === "pending" || latest.workflowStatus === "extracting") {
+          await updateSourceWorkflowStatus(source.id, "failed_fetch");
+        }
       }
     });
   }

@@ -14,21 +14,29 @@ if (!databaseUrl) {
 async function main() {
   if (!databaseUrl) throw new Error("DATABASE_URL is required to run migrations.");
   const sql = neon(databaseUrl);
-  const migrationPath = path.join(process.cwd(), "db", "migrations", "0001_consensuswiki.sql");
-  const migration = (await readFile(migrationPath, "utf8"))
-    .split("\n")
-    .filter((line) => !line.trimStart().startsWith("--"))
-    .join("\n");
-  const statements = migration
-    .split(";")
-    .map((statement) => statement.trim())
-    .filter(Boolean);
-
-  for (const statement of statements) {
-    await sql.query(statement);
+  const migrationsDir = path.join(process.cwd(), "db", "migrations");
+  const { readdir } = await import("node:fs/promises");
+  const files = (await readdir(migrationsDir))
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+  let total = 0;
+  for (const file of files) {
+    const migrationPath = path.join(migrationsDir, file);
+    const migration = (await readFile(migrationPath, "utf8"))
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n");
+    const statements = migration
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+    for (const statement of statements) {
+      await sql.query(statement);
+    }
+    total += statements.length;
+    console.log(`Applied ${statements.length} statements from ${path.relative(process.cwd(), migrationPath)}.`);
   }
-
-  console.log(`Applied ${statements.length} migration statements from ${path.relative(process.cwd(), migrationPath)}.`);
+  console.log(`Migrations complete: ${total} statements across ${files.length} files.`);
 }
 
 main().catch((error) => {

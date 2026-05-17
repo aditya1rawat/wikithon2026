@@ -76,6 +76,33 @@ describe("ingest workflow", () => {
     expect(call![1]).toBe("max");
   });
 
+  test("hydra timeout does not block local workflow_status = complete", async () => {
+    process.env = {
+      ...originalEnv,
+      HYDRA_API_KEY: "test-key",
+      HYDRA_TENANT_ID: "tenant-1",
+      HYDRA_BASE_URL: "https://hydra.test",
+      NIM_API_KEY: "",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () => `<html><head><title>x</title></head><body><article><p>OpenAI released GPT-5 as a generally available model in May 2026.</p></article></body></html>`,
+        })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s3", status: "queued" }) })
+        .mockResolvedValue({ ok: true, json: async () => ({ statuses: [{ file_id: "s3", indexing_status: "queued" }] }) })
+    );
+
+    const result = await runIngestWorkflow("https://example.com/hydra-stuck");
+    const source = await getSource(result.source.id);
+
+    expect(source?.hydraStatus).toBe("queued");
+    expect(source?.workflowStatus).toBe("complete");
+  }, 20_000);
+
   test("maps completed Hydra provider status to local success", async () => {
     process.env = {
       ...originalEnv,

@@ -5,7 +5,7 @@ import { pollHydraStatus as pollHydraProviderStatus, uploadKnowledge } from "./h
 import { canonicalizeEntities, extractClaims, judgeContradictions } from "./llm";
 import { normalizeUrl, type NormalizedSource } from "./normalize-source";
 import { store } from "./store";
-import type { Claim, ClaimRelation, Entity, HydraStatus, Source, Topic } from "./types";
+import type { Claim, ClaimRelation, Entity, HydraStatus, Source, Topic, WorkflowStatus } from "./types";
 
 type WorkflowInput = string | { url: string; topicId?: string };
 
@@ -35,17 +35,20 @@ export async function runIngestWorkflow(input: WorkflowInput) {
   try {
     await hydraUpload(context);
   } catch (error) {
-    await safeUpdateSourceStatus(context.source.id, "failed_upload");
+    await safeUpdateWorkflowStatus(context.source.id, "failed_upload");
     throw error;
   }
   try {
     await pollHydraStatus(context);
-  } catch (error) {
-    await safeUpdateSourceStatus(context.source.id, "hydra_errored");
-    throw error;
+  } catch {
+    // Hydra failure does not block local pipeline.
+    await safeUpdateHydraStatus(context.source.id, "errored");
   }
+  await safeUpdateWorkflowStatus(context.source.id, "extracting");
   await extractClaimsStep(context);
+  await safeUpdateWorkflowStatus(context.source.id, "judging");
   await judgeContradictionsStep(context);
+  await safeUpdateWorkflowStatus(context.source.id, "complete");
   await invalidateCacheStep(context);
 
   return {
@@ -84,6 +87,7 @@ export async function fetchAndNormalize(input: WorkflowInput): Promise<WorkflowC
     publisher: normalized.publisher ?? registered.publisher,
     publishedAt: normalized.publishedAt ?? registered.publishedAt,
     hydraStatus: "queued",
+    workflowStatus: "pending",
   };
   await safeUpsertSource(source);
   return { topic, url, source, normalized };
@@ -100,14 +104,13 @@ export async function hydraUpload(context: WorkflowContext) {
     text: context.normalized.bodyText,
     metadata: { topic_id: context.topic.id, ingest_run_id: context.source.workflowRunId },
   });
-  await safeUpdateSourceStatus(context.source.id, "queued");
   return context.hydraUpload;
 }
 
 export async function pollHydraStatus(context: WorkflowContext) {
   const hydraStatus = await pollHydraProviderStatus(context.source.id, { ceilingMs: 10_000 });
   context.hydraStatus = hydraStatus;
-  await safeUpdateSourceStatus(context.source.id, mapProviderStatusToHydraStatus(hydraStatus.status));
+  await safeUpdateHydraStatus(context.source.id, mapProviderStatusToHydraStatus(hydraStatus.status));
   return hydraStatus;
 }
 
@@ -224,11 +227,19 @@ async function safeUpsertSource(source: Source) {
   }
 }
 
-async function safeUpdateSourceStatus(sourceId: string, status: HydraStatus) {
+async function safeUpdateHydraStatus(sourceId: string, status: HydraStatus) {
   try {
     await store.updateSourceStatus(sourceId, status);
   } catch {
-    // Best effort: status visibility should not kill deterministic ingest tests.
+    // Best effort.
+  }
+}
+
+async function safeUpdateWorkflowStatus(sourceId: string, status: WorkflowStatus) {
+  try {
+    await store.updateSourceWorkflowStatus(sourceId, status);
+  } catch {
+    // Best effort.
   }
 }
 
@@ -263,9 +274,9 @@ function mapProviderStatusToHydraStatus(status: string): HydraStatus {
     case "errored":
     case "error":
     case "failed":
-      return "hydra_errored";
+      return "errored";
     default:
-      return "hydra_errored";
+      return "unknown";
   }
 }
 

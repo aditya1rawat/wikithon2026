@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import type { HydraStatus, Source } from "@/lib/types";
+import type { Source } from "@/lib/types";
 
 export default async function IngestPage() {
   const sources = await listSources();
@@ -39,9 +39,9 @@ export default async function IngestPage() {
         <CardContent className="space-y-4">
           <div className="rounded-md border border-dashed bg-muted/30 p-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="destructive">failed_upload</Badge>
-              <Badge variant="outline">failed_fetch</Badge>
-              <Badge variant="outline">hydra_errored</Badge>
+              <Badge variant="destructive">workflow: failed_upload</Badge>
+              <Badge variant="destructive">workflow: failed_fetch</Badge>
+              <Badge variant="outline">hydra: errored</Badge>
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
               <p className="text-muted-foreground">Failed runs keep their last completed step visible for debugging.</p>
@@ -57,12 +57,12 @@ export default async function IngestPage() {
                   <div className="font-medium leading-6">{source.title}</div>
                   <div className="text-sm text-muted-foreground">{source.publisher} · {source.publishedAt?.slice(0, 10) ?? "undated"}</div>
                 </div>
-                <StatusBadge status={source.hydraStatus} />
+                <StatusBadge source={source} />
               </div>
               <WorkflowTimeline source={source} />
-              {isFailed(source.hydraStatus) ? (
+              {isFailed(source.workflowStatus) ? (
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3">
-                  <p className="text-sm text-destructive">Pipeline stopped at {source.hydraStatus}. Retry will re-run from the failed step.</p>
+                  <p className="text-sm text-destructive">Pipeline stopped at {source.workflowStatus}. Retry will re-run from the failed step.</p>
                   <Button type="button" size="sm" variant="outline">
                     <RotateCcw className="h-4 w-4" /> Retry failed step
                   </Button>
@@ -77,7 +77,7 @@ export default async function IngestPage() {
 }
 
 function WorkflowTimeline({ source }: { source: Source }) {
-  const steps = buildSteps(source.hydraStatus);
+  const steps = buildSteps(source);
   return (
     <ol className="mt-4 grid gap-2 sm:grid-cols-4">
       {steps.map((step) => {
@@ -96,48 +96,24 @@ function WorkflowTimeline({ source }: { source: Source }) {
   );
 }
 
-function buildSteps(status: HydraStatus) {
-  const active = status === "queued" || status === "in_progress";
-  const fetchFailed = status === "failed_fetch";
-  const uploadFailed = status === "failed_upload";
-  const hydraFailed = status === "hydra_errored";
-  const complete = status === "success";
-  const uploadState = uploadStepState({ uploadFailed, active });
-  const pollState = pollStepState({ hydraFailed, complete });
+function buildSteps(source: Source) {
+  const wf = source.workflowStatus;
+  const hydra = source.hydraStatus;
+  const fetchState: StepState = wf === "failed_fetch" ? "error" : "done";
+  const uploadState: StepState = wf === "failed_upload" ? "error" : wf === "pending" ? "pending" : "done";
+  const hydraState: StepState = hydra === "errored" ? "error" : hydra === "success" ? "done" : "pending";
+  const extractState: StepState =
+    wf === "complete" ? "done" : wf === "extracting" || wf === "judging" ? "pending" : wf === "failed_fetch" || wf === "failed_upload" ? "error" : "pending";
 
   return [
-    step("Fetch and normalize", fetchFailed ? "Fetch failed" : "Article/PDF text ready", fetchFailed ? "error" : "done"),
-    step("Hydra upload", uploadStepDetail(uploadState), uploadState),
-    step("Hydra poll", pollStepDetail(pollState), pollState),
-    step("Claims and graph", complete ? "Entity pages invalidated" : "Runs after Hydra success", complete ? "done" : "pending"),
+    step("Fetch and normalize", fetchState === "error" ? "Fetch failed" : "Article/PDF text ready", fetchState),
+    step("Hydra upload", uploadState === "error" ? "Upload needs retry" : uploadState === "pending" ? "Waiting on upload" : "Knowledge accepted", uploadState),
+    step("Hydra poll", hydraState === "error" ? "Hydra returned errored" : hydraState === "done" ? "Hydra processing complete" : `Hydra ${hydra}`, hydraState),
+    step("Claims and graph", extractState === "done" ? "Claims persisted, entity pages invalidated" : extractState === "error" ? "Pipeline halted" : `Workflow ${wf}`, extractState),
   ];
 }
 
 type StepState = "done" | "pending" | "error";
-
-function uploadStepState({ uploadFailed, active }: { uploadFailed: boolean; active: boolean }): StepState {
-  if (uploadFailed) return "error";
-  if (active) return "pending";
-  return "done";
-}
-
-function uploadStepDetail(state: StepState) {
-  if (state === "error") return "Upload needs retry";
-  if (state === "pending") return "Waiting on upload";
-  return "Knowledge accepted";
-}
-
-function pollStepState({ hydraFailed, complete }: { hydraFailed: boolean; complete: boolean }): StepState {
-  if (hydraFailed) return "error";
-  if (complete) return "done";
-  return "pending";
-}
-
-function pollStepDetail(state: StepState) {
-  if (state === "error") return "Hydra returned errored";
-  if (state === "done") return "Processing complete";
-  return "Status pending";
-}
 
 function step(label: string, detail: string, state: StepState) {
   const icon = { done: CheckCircle2, pending: Clock3, error: AlertTriangle }[state];
@@ -149,11 +125,20 @@ function step(label: string, detail: string, state: StepState) {
   return { label, detail, icon, tone };
 }
 
-function StatusBadge({ status }: { status: HydraStatus }) {
-  if (isFailed(status)) return <Badge variant="destructive">{status}</Badge>;
-  return <Badge variant={status === "success" ? "secondary" : "outline"}>{status}</Badge>;
+function StatusBadge({ source }: { source: Source }) {
+  const workflowFailed = source.workflowStatus === "failed_fetch" || source.workflowStatus === "failed_upload";
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Badge variant={workflowFailed ? "destructive" : source.workflowStatus === "complete" ? "secondary" : "outline"}>
+        workflow: {source.workflowStatus}
+      </Badge>
+      <Badge variant={source.hydraStatus === "errored" ? "destructive" : "outline"}>
+        hydra: {source.hydraStatus}
+      </Badge>
+    </div>
+  );
 }
 
-function isFailed(status: HydraStatus) {
-  return status === "errored" || status === "failed_fetch" || status === "failed_upload" || status === "hydra_errored";
+function isFailed(status: Source["workflowStatus"]) {
+  return status === "failed_fetch" || status === "failed_upload";
 }

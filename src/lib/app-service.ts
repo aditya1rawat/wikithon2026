@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { demoSavedQueries, demoTopic, stableClaimId, stableSourceId } from "./demo-data";
 import { groupClaimsForEntity, normalizeAlias, store } from "./store";
-import type { Claim, ClaimRelation, Entity, HydraStatus, Lede, Source } from "./types";
+import type { Claim, ClaimRelation, Entity, HydraStatus, Lede, Source, WorkflowStatus } from "./types";
 
 export { groupClaimsForEntity, normalizeAlias, stableClaimId, stableSourceId };
 
@@ -45,6 +45,12 @@ export async function upsertSource(source: Source) {
 
 export async function updateSourceStatus(id: string, status: HydraStatus) {
   const saved = await store.updateSourceStatus(id, status);
+  revalidateTopicViews();
+  return saved;
+}
+
+export async function updateSourceWorkflowStatus(id: string, status: WorkflowStatus) {
+  const saved = await store.updateSourceWorkflowStatus(id, status);
   revalidateTopicViews();
   return saved;
 }
@@ -96,6 +102,7 @@ export async function registerDemoIngest(url: string, title?: string) {
     publishedAt: new Date().toISOString(),
     ingestedAt: new Date().toISOString(),
     hydraStatus: "queued",
+    workflowStatus: "pending",
     workflowRunId: `local-${Date.now()}`,
   });
 }

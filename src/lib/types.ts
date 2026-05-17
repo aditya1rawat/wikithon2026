@@ -1,7 +1,8 @@
 export type EntityType = "PERSON" | "ORG" | "PRODUCT" | "EVENT" | "MODEL";
 export type ClaimStance = "factual" | "opinion" | "prediction" | "leak" | "rumor";
 export type ClaimRelationType = "agree" | "contradict" | "qualify" | "unrelated";
-export type HydraStatus = "queued" | "in_progress" | "success" | "errored" | "failed_fetch" | "failed_upload" | "hydra_errored";
+export type HydraStatus = "queued" | "in_progress" | "success" | "errored" | "unknown";
+export type WorkflowStatus = "pending" | "extracting" | "judging" | "complete" | "failed_fetch" | "failed_upload";
 
 export interface Topic {
   id: string;
@@ -19,6 +20,7 @@ export interface Source {
   publishedAt: string | null;
   ingestedAt: string;
   hydraStatus: HydraStatus;
+  workflowStatus: WorkflowStatus;
   workflowRunId: string | null;
 }
 

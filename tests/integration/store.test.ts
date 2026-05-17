@@ -3,6 +3,34 @@ import { createMemoryStore } from "@/lib/store";
 import { demoTopic, stableClaimId, stableSourceId } from "@/lib/demo-data";
 
 describe("memory store fallback", () => {
+  test("persists separate hydra and workflow statuses", async () => {
+    const store = createMemoryStore({ seedDemoData: false });
+    await store.upsertTopic(demoTopic);
+
+    const id = stableSourceId(demoTopic.id, "https://example.com/dual-status");
+    await store.upsertSource({
+      id,
+      topicId: demoTopic.id,
+      url: "https://example.com/dual-status",
+      title: "Dual status",
+      publisher: "Example",
+      publishedAt: "2026-05-17T00:00:00.000Z",
+      ingestedAt: "2026-05-17T00:00:00.000Z",
+      hydraStatus: "in_progress",
+      workflowStatus: "complete",
+      workflowRunId: "wf-2",
+    });
+
+    const source = await store.getSource(id);
+    expect(source?.hydraStatus).toBe("in_progress");
+    expect(source?.workflowStatus).toBe("complete");
+
+    await store.updateSourceWorkflowStatus(id, "failed_upload");
+    const after = await store.getSource(id);
+    expect(after?.workflowStatus).toBe("failed_upload");
+    expect(after?.hydraStatus).toBe("in_progress");
+  });
+
   test("upserts ingest data idempotently without a database", async () => {
     const store = createMemoryStore({ seedDemoData: false });
     await store.upsertTopic(demoTopic);
@@ -17,6 +45,7 @@ describe("memory store fallback", () => {
       publishedAt: "2026-05-16T12:00:00.000Z",
       ingestedAt: "2026-05-16T12:01:00.000Z",
       hydraStatus: "queued",
+      workflowStatus: "pending",
       workflowRunId: "wf-1",
     });
     await store.upsertSource({ ...source, title: "New source updated" });

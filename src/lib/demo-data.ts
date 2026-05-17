@@ -38,6 +38,7 @@ export const demoSources: Source[] = sourceSpecs.map(([url, title, publisher, pu
   publishedAt,
   ingestedAt: publishedAt,
   hydraStatus: "success",
+  workflowStatus: "complete",
   workflowRunId: `demo-${sha256(url).slice(0, 8)}`,
 }));
 

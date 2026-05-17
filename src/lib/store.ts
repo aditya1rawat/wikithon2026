@@ -25,6 +25,7 @@ import type {
   SavedQuery,
   Source,
   Topic,
+  WorkflowStatus,
 } from "./types";
 
 type Sql = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<Record<string, unknown>[]>;
@@ -42,6 +43,7 @@ export interface ConsensusStore {
   saveQuery(question: string, answerMd: string, citedSourceIds?: string[], topicId?: string): Promise<SavedQuery>;
   upsertSource(source: Source): Promise<Source>;
   updateSourceStatus(id: string, status: HydraStatus): Promise<Source | null>;
+  updateSourceWorkflowStatus(id: string, status: WorkflowStatus): Promise<Source | null>;
   upsertEntityWithAliases(input: { entity: Entity; aliases?: string[] }): Promise<Entity>;
   insertClaims(claims: Claim[]): Promise<Claim[]>;
   insertClaimRelations(relations: ClaimRelation[]): Promise<ClaimRelation[]>;
@@ -159,6 +161,12 @@ export function createMemoryStore(options: { seedDemoData?: boolean; now?: () =>
       source.hydraStatus = status;
       return cloneSource(source);
     },
+    async updateSourceWorkflowStatus(id, status) {
+      const source = sources.find((item) => item.id === id);
+      if (!source) return null;
+      source.workflowStatus = status;
+      return cloneSource(source);
+    },
     async upsertEntityWithAliases(input) {
       const normalizedCanonical = normalizeAlias(input.entity.canonicalName);
       const existingIndex = entities.findIndex(
@@ -217,7 +225,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
   async function loadSnapshot(topicId = demoTopic.id): Promise<StoreSnapshot> {
     const [topicRows, sourceRows, entityRows, aliasRows, claimRows, relationRows, ledeRows] = await Promise.all([
       sql`SELECT id, title, hydra_sub_tenant_id, created_at FROM topics WHERE id = ${topicId} LIMIT 1`,
-      sql`SELECT id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_run_id FROM sources WHERE topic_id = ${topicId}`,
+      sql`SELECT id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id FROM sources WHERE topic_id = ${topicId}`,
       sql`SELECT id, topic_id, canonical_name, entity_type, hydra_entity_id, first_seen FROM entities WHERE topic_id = ${topicId}`,
       sql`
         SELECT ea.alias, ea.entity_id
@@ -283,7 +291,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
     },
     async getSource(id) {
       const rows = await sql`
-        SELECT id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_run_id
+        SELECT id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id
         FROM sources
         WHERE id = ${id}
         LIMIT 1
@@ -334,7 +342,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
     async upsertSource(source) {
       await ensureDemoTopic(source.topicId);
       const rows = await sql`
-        INSERT INTO sources (id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_run_id)
+        INSERT INTO sources (id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id)
         VALUES (
           ${source.id},
           ${source.topicId},
@@ -344,6 +352,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
           ${source.publishedAt},
           ${source.ingestedAt},
           ${source.hydraStatus},
+          ${source.workflowStatus},
           ${source.workflowRunId}
         )
         ON CONFLICT (id) DO UPDATE SET
@@ -354,8 +363,9 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
           published_at = EXCLUDED.published_at,
           ingested_at = EXCLUDED.ingested_at,
           hydra_status = EXCLUDED.hydra_status,
+          workflow_status = EXCLUDED.workflow_status,
           workflow_run_id = EXCLUDED.workflow_run_id
-        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_run_id
+        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id
       `;
       return rowToSource(rows[0]);
     },
@@ -364,7 +374,16 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
         UPDATE sources
         SET hydra_status = ${status}
         WHERE id = ${id}
-        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_run_id
+        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id
+      `;
+      return rows[0] ? rowToSource(rows[0]) : null;
+    },
+    async updateSourceWorkflowStatus(id, status) {
+      const rows = await sql`
+        UPDATE sources
+        SET workflow_status = ${status}
+        WHERE id = ${id}
+        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id
       `;
       return rows[0] ? rowToSource(rows[0]) : null;
     },
@@ -663,6 +682,7 @@ function rowToSource(row: Record<string, unknown>): Source {
     publishedAt: row.published_at ? toIsoString(row.published_at) : null,
     ingestedAt: toIsoString(row.ingested_at),
     hydraStatus: String(row.hydra_status ?? "queued") as HydraStatus,
+    workflowStatus: String(row.workflow_status ?? "pending") as WorkflowStatus,
     workflowRunId: nullableString(row.workflow_run_id),
   };
 }
