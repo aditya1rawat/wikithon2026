@@ -234,7 +234,7 @@ async function safeUpdateSourceStatus(sourceId: string, status: HydraStatus) {
 
 function safeRevalidateTag(tag: string) {
   try {
-    (revalidateTag as unknown as (tag: string, profile: string) => void)(tag, "max");
+    revalidateTag(tag, "max");
   } catch {
     // Cache invalidation is best effort in tests and local fallback mode.
   }

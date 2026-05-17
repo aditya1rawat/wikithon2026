@@ -55,6 +55,26 @@ describe("ingest workflow", () => {
     expect(cache.revalidateTag).toHaveBeenCalledWith("graph:ai-industry", "max");
   });
 
+  test("calls revalidateTag with tag and profile arguments", async () => {
+    process.env = { ...originalEnv, NIM_API_KEY: "", HYDRA_API_KEY: "" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => "<html><head><title>t</title></head><body><article><p>GPT-5 shipped in May 2026.</p></article></body></html>",
+      })
+    );
+    const cache = await import("next/cache");
+
+    await runIngestWorkflow("https://example.com/tagcheck");
+
+    const call = (cache.revalidateTag as unknown as { mock: { calls: unknown[][] } }).mock.calls.find(
+      (args) => args[0] === "topic:ai-industry"
+    );
+    expect(call).toBeDefined();
+    expect(call![1]).toBe("max");
+  });
+
   test("maps completed Hydra provider status to local success", async () => {
     process.env = {
       ...originalEnv,
