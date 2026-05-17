@@ -602,16 +602,18 @@ function buildEntityPage(snapshot: StoreSnapshot, slug: string): EntityPage | nu
 }
 
 function buildGraphData(snapshot: StoreSnapshot): GraphData {
+  const entityClaimCount = new Map<string, number>();
+  const sourceClaimCount = new Map<string, number>();
+  for (const claim of snapshot.claims) {
+    entityClaimCount.set(claim.entityId, (entityClaimCount.get(claim.entityId) ?? 0) + 1);
+    sourceClaimCount.set(claim.sourceId, (sourceClaimCount.get(claim.sourceId) ?? 0) + 1);
+  }
   const entityNodes = snapshot.entities.map((entity) => ({
     id: entity.id,
     label: entity.canonicalName,
     type: entity.entityType,
-    claimCount: snapshot.claims.filter((claim) => claim.entityId === entity.id).length,
+    claimCount: entityClaimCount.get(entity.id) ?? 0,
   }));
-  const sourceClaimCount = new Map<string, number>();
-  for (const claim of snapshot.claims) {
-    sourceClaimCount.set(claim.sourceId, (sourceClaimCount.get(claim.sourceId) ?? 0) + 1);
-  }
   const sourceNodes = snapshot.sources
     .filter((source) => (sourceClaimCount.get(source.id) ?? 0) > 0)
     .map((source) => ({

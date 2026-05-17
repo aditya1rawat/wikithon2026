@@ -239,5 +239,7 @@ describe("memory store fallback", () => {
     const graph = await store.getGraphData();
     const sourceNodes = graph.nodes.filter((node) => node.id.startsWith("source:"));
     expect(sourceNodes.map((node) => node.id)).toEqual([`source:${usedSourceId}`]);
+    const usedNode = sourceNodes.find((node) => node.id === `source:${usedSourceId}`);
+    expect(usedNode?.claimCount).toBe(1);
   });
 });
