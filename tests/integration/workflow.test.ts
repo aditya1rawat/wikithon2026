@@ -77,7 +77,7 @@ describe("ingest workflow", () => {
           `,
         })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s2", status: "queued" }) })
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s2", status: "completed" }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ statuses: [{ file_id: "s2", indexing_status: "completed" }] }) })
     );
 
     const result = await runIngestWorkflow("https://example.com/gpt-5-completed");

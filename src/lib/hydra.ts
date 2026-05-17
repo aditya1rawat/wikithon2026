@@ -18,14 +18,16 @@ const WRITE_TIMEOUT_MS = 15_000;
 const READ_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 2_000;
 const POLL_CEILING_MS = 90_000;
-const NON_TERMINAL_STATUSES = new Set(["queued", "in_progress"]);
+const NON_TERMINAL_STATUSES = new Set(["queued", "in_progress", "processing", "graph_creation"]);
 const TERMINAL_STATUSES = new Set(["success", "complete", "completed", "errored", "error", "failed"]);
 
-const baseUrl = () => (process.env.HYDRA_BASE_URL ?? "https://api.hydradb.ai").replace(/\/$/, "");
+const baseUrl = () => (process.env.HYDRA_BASE_URL ?? "https://api.hydradb.com").replace(/\/$/, "");
 
 export async function uploadKnowledge(input: HydraKnowledgeInput) {
   if (!process.env.HYDRA_API_KEY) return { sourceId: input.id, status: "queued" as const, demo: true };
-  const body = {
+  const body = new FormData();
+  body.append("tenant_id", process.env.HYDRA_TENANT_ID ?? "");
+  body.append("app_knowledge", JSON.stringify([{
     tenant_id: process.env.HYDRA_TENANT_ID,
     sub_tenant_id: input.subTenantId,
     id: input.id,
@@ -35,14 +37,14 @@ export async function uploadKnowledge(input: HydraKnowledgeInput) {
     timestamp: input.timestamp ?? null,
     content: { text: input.text },
     additional_metadata: input.metadata ?? {},
-  };
+  }]));
   return retry(async () => {
     const response = await fetchWithTimeout(`${baseUrl()}/ingestion/upload_knowledge`, {
       timeoutMs: WRITE_TIMEOUT_MS,
       init: {
         method: "POST",
-        headers: hydraHeaders(true),
-        body: JSON.stringify({ app_knowledge: body }),
+        headers: hydraHeaders(false),
+        body,
       },
     });
     if (!response.ok) throw new HydraError(`Hydra upload failed: ${response.status}`, isRetryableStatus(response.status));
@@ -111,17 +113,21 @@ export async function recallGraphContext(subTenantId: string) {
 }
 
 async function readHydraStatus(sourceId: string) {
-  const response = await fetchWithTimeout(`${baseUrl()}/ingestion/status/${sourceId}`, {
+  const url = `${baseUrl()}/ingestion/verify_processing?file_ids=${encodeURIComponent(sourceId)}&tenant_id=${encodeURIComponent(process.env.HYDRA_TENANT_ID ?? "")}`;
+  const response = await fetchWithTimeout(url, {
     timeoutMs: READ_TIMEOUT_MS,
-    init: { headers: hydraHeaders(false) },
+    init: { method: "POST", headers: hydraHeaders(false) },
   });
   if (!response.ok) throw new HydraError(`Hydra status failed: ${response.status}`, isRetryableStatus(response.status));
-  return response.json();
+  const json = await response.json();
+  const status = json.statuses?.[0]?.indexing_status ?? "errored";
+  return { sourceId, status, raw: json };
 }
 
 function hydraHeaders(json: boolean) {
   return {
     Authorization: `Bearer ${process.env.HYDRA_API_KEY}`,
+    accept: "application/json",
     ...(json ? { "Content-Type": "application/json" } : {}),
   };
 }

@@ -46,8 +46,10 @@ describe("Hydra fallback", () => {
     expect(result).toMatchObject({ status: "queued" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe("https://hydra.test/ingestion/upload_knowledge");
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
-      app_knowledge: {
+    const body = fetchMock.mock.calls[1][1].body as FormData;
+    expect(body.get("tenant_id")).toBe("tenant-1");
+    expect(JSON.parse(String(body.get("app_knowledge")))).toEqual([
+      {
         tenant_id: "tenant-1",
         sub_tenant_id: "topic-subtenant",
         id: "s1",
@@ -58,36 +60,39 @@ describe("Hydra fallback", () => {
         content: { text: "Article body" },
         additional_metadata: { topic_id: "ai-industry", ingest_run_id: "run-1" },
       },
-    });
+    ]);
   });
 
   test("polls status until terminal success within the ceiling", async () => {
     process.env = {
       ...originalEnv,
       HYDRA_API_KEY: "test-key",
+      HYDRA_TENANT_ID: "tenant-1",
       HYDRA_BASE_URL: "https://hydra.test",
     };
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s1", status: "queued" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s1", status: "in_progress" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s1", status: "success" }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ statuses: [{ file_id: "s1", indexing_status: "queued" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ statuses: [{ file_id: "s1", indexing_status: "processing" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ statuses: [{ file_id: "s1", indexing_status: "completed" }] }) });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 200 })).resolves.toMatchObject({ status: "success" });
+    await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 200 })).resolves.toMatchObject({ status: "completed" });
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://hydra.test/ingestion/verify_processing?file_ids=s1&tenant_id=tenant-1");
   });
 
   test("returns unknown provider statuses as terminal for workflow mapping", async () => {
     process.env = {
       ...originalEnv,
       HYDRA_API_KEY: "test-key",
+      HYDRA_TENANT_ID: "tenant-1",
       HYDRA_BASE_URL: "https://hydra.test",
     };
-    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s1", status: "completed" }) });
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ statuses: [{ file_id: "s1", indexing_status: "strange_done" }] }) });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 200 })).resolves.toMatchObject({ status: "completed" });
+    await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 200 })).resolves.toMatchObject({ status: "strange_done" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

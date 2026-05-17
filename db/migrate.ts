@@ -1,9 +1,9 @@
 import { neon } from "@neondatabase/serverless";
-import { loadEnvConfig } from "@next/env";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-loadEnvConfig(process.cwd());
+loadLocalEnv();
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -12,6 +12,7 @@ if (!databaseUrl) {
 }
 
 async function main() {
+  if (!databaseUrl) throw new Error("DATABASE_URL is required to run migrations.");
   const sql = neon(databaseUrl);
   const migrationPath = path.join(process.cwd(), "db", "migrations", "0001_consensuswiki.sql");
   const migration = (await readFile(migrationPath, "utf8"))
@@ -34,3 +35,18 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+function loadLocalEnv() {
+  const envPath = path.join(process.cwd(), ".env.local");
+  if (!existsSync(envPath)) return;
+  const lines = readFileSync(envPath, "utf8").split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const separator = trimmed.indexOf("=");
+    if (separator === -1) continue;
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim().replace(/^["']|["']$/g, "");
+    process.env[key] ??= value;
+  }
+}
