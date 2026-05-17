@@ -1,32 +1,242 @@
-import { revalidatePath } from "next/cache";
-import { registerDemoIngest } from "./app-service";
-import { demoTopic } from "./demo-data";
-import { uploadKnowledge, pollHydraStatus } from "./hydra";
-import { extractClaims, judgeContradictions } from "./llm";
-import { normalizeUrl } from "./normalize-source";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { findEntityByAlias, registerDemoIngest } from "./app-service";
+import { demoTopic, stableClaimId } from "./demo-data";
+import { pollHydraStatus as pollHydraProviderStatus, uploadKnowledge } from "./hydra";
+import { canonicalizeEntities, extractClaims, judgeContradictions } from "./llm";
+import { normalizeUrl, type NormalizedSource } from "./normalize-source";
+import { store } from "./store";
+import type { Claim, ClaimRelation, Entity, HydraStatus, Source, Topic } from "./types";
 
-export async function runIngestWorkflow(url: string) {
-  const source = await registerDemoIngest(url);
-  let normalized;
+type WorkflowInput = string | { url: string; topicId?: string };
+
+interface WorkflowContext {
+  topic: Topic;
+  url: string;
+  source: Source;
+  normalized: NormalizedSource;
+  hydraUpload?: unknown;
+  hydraStatus?: { sourceId?: string; status: string; [key: string]: unknown };
+  claims?: ExtractedWorkflowClaim[];
+  persistedClaims?: Claim[];
+  touchedEntityIds?: string[];
+  relations?: ClaimRelation[];
+}
+
+interface ExtractedWorkflowClaim {
+  entity: string;
+  claim: string;
+  stance: Claim["stance"];
+  confidence: number;
+  entityId: string;
+}
+
+export async function runIngestWorkflow(input: WorkflowInput) {
+  const context = await fetchAndNormalize(input);
+  await hydraUpload(context);
+  await pollHydraStatus(context);
+  await extractClaimsStep(context);
+  await judgeContradictionsStep(context);
+  await invalidateCacheStep(context);
+
+  return {
+    source: context.source,
+    normalized: context.normalized,
+    hydraUpload: context.hydraUpload,
+    hydraStatus: context.hydraStatus,
+    claims: context.claims ?? [],
+    persistedClaims: context.persistedClaims ?? [],
+    relationCount: context.relations?.length ?? 0,
+    touchedEntityIds: context.touchedEntityIds ?? [],
+  };
+}
+
+export async function fetchAndNormalize(input: WorkflowInput): Promise<WorkflowContext> {
+  const url = typeof input === "string" ? input : input.url;
+  const topic = topicFor(typeof input === "string" ? undefined : input.topicId);
+  const registered = await registerDemoIngest(url);
+
+  let normalized: NormalizedSource;
   try {
     normalized = await normalizeUrl(url);
   } catch {
-    normalized = { title: source.title, publisher: source.publisher, publishedAt: source.publishedAt, bodyText: source.title };
+    normalized = {
+      title: registered.title,
+      publisher: registered.publisher,
+      publishedAt: registered.publishedAt,
+      bodyText: registered.title,
+    };
   }
-  await uploadKnowledge({
-    id: source.id,
-    subTenantId: demoTopic.hydraSubTenantId,
-    source: normalized.publisher ?? "unknown",
-    title: normalized.title,
-    url,
-    timestamp: normalized.publishedAt,
-    text: normalized.bodyText,
-    metadata: { topic_id: demoTopic.id, ingest_run_id: source.workflowRunId },
+
+  const source: Source = {
+    ...registered,
+    topicId: topic.id,
+    title: normalized.title || registered.title,
+    publisher: normalized.publisher ?? registered.publisher,
+    publishedAt: normalized.publishedAt ?? registered.publishedAt,
+    hydraStatus: "queued",
+  };
+  await safeUpsertSource(source);
+  return { topic, url, source, normalized };
+}
+
+export async function hydraUpload(context: WorkflowContext) {
+  context.hydraUpload = await uploadKnowledge({
+    id: context.source.id,
+    subTenantId: context.topic.hydraSubTenantId,
+    source: context.normalized.publisher ?? context.source.publisher ?? "unknown",
+    title: context.normalized.title,
+    url: context.url,
+    timestamp: context.normalized.publishedAt,
+    text: context.normalized.bodyText,
+    metadata: { topic_id: context.topic.id, ingest_run_id: context.source.workflowRunId },
   });
-  await pollHydraStatus(source.id);
-  const claims = await extractClaims(normalized.bodyText);
-  if (claims.length >= 2) await judgeContradictions(claims[0].claim, claims[1].claim);
-  revalidatePath("/");
-  revalidatePath("/graph");
-  return { source, claims };
+  await safeUpdateSourceStatus(context.source.id, "queued");
+  return context.hydraUpload;
+}
+
+export async function pollHydraStatus(context: WorkflowContext) {
+  const hydraStatus = await pollHydraProviderStatus(context.source.id);
+  context.hydraStatus = hydraStatus;
+  await safeUpdateSourceStatus(context.source.id, hydraStatus.status === "errored" ? "hydra_errored" : (hydraStatus.status as HydraStatus));
+  return hydraStatus;
+}
+
+export async function extractClaimsStep(context: WorkflowContext) {
+  const claims = await extractClaims(context.normalized.bodyText);
+  const canonicalEntities = await canonicalizeEntities(claims.map((claim) => claim.entity));
+  const canonicalByRaw = new Map(canonicalEntities.map((entity) => [entity.raw, entity]));
+  const touchedEntityIds = new Set<string>();
+  const persistedClaims: Claim[] = [];
+  const workflowClaims: ExtractedWorkflowClaim[] = [];
+
+  for (const claim of claims) {
+    const canonical = canonicalByRaw.get(claim.entity) ?? canonicalEntities.find((entity) => entity.canonicalName === claim.entity);
+    const entity = await ensureEntity({
+      raw: claim.entity,
+      canonicalName: canonical?.canonicalName ?? claim.entity,
+      entityType: canonical?.entityType ?? "PRODUCT",
+      topic: context.topic,
+    });
+    touchedEntityIds.add(entity.id);
+    workflowClaims.push({ ...claim, entityId: entity.id });
+    persistedClaims.push({
+      id: stableClaimId(context.source.id, claim.claim),
+      sourceId: context.source.id,
+      entityId: entity.id,
+      claimText: claim.claim,
+      stance: claim.stance,
+      confidence: claim.confidence,
+      chunkUuid: null,
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  if (persistedClaims.length > 0) await store.insertClaims(persistedClaims);
+  context.claims = workflowClaims;
+  context.persistedClaims = persistedClaims;
+  context.touchedEntityIds = [...touchedEntityIds];
+  return workflowClaims;
+}
+
+export async function judgeContradictionsStep(context: WorkflowContext) {
+  const newClaims = context.persistedClaims ?? [];
+  const relations: ClaimRelation[] = [];
+  const seenPairs = new Set<string>();
+
+  for (const claim of newClaims) {
+    const page = await store.getEntityPage(claim.entityId, context.topic.id);
+    const candidates = (page?.claims ?? [])
+      .filter((candidate) => candidate.id !== claim.id && candidate.entityId === claim.entityId)
+      .slice(0, 10);
+
+    for (const candidate of candidates) {
+      const pairKey = [claim.id, candidate.id].sort().join(":");
+      if (seenPairs.has(pairKey)) continue;
+      seenPairs.add(pairKey);
+      const judgement = await judgeContradictions(claim.claimText, candidate.claimText);
+      relations.push({
+        claimA: claim.id,
+        claimB: candidate.id,
+        relation: judgement.relation,
+        rationale: judgement.rationale,
+        llmConfidence: judgement.confidence,
+        judgedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  if (relations.length > 0) await store.insertClaimRelations(relations);
+  context.relations = relations;
+  return relations;
+}
+
+export async function invalidateCacheStep(context: WorkflowContext) {
+  for (const entityId of context.touchedEntityIds ?? []) {
+    safeRevalidateTag(`entity:${entityId}`);
+    safeRevalidateTag(`lede:${entityId}`);
+  }
+  safeRevalidateTag(`topic:${context.topic.id}`);
+  safeRevalidateTag(`graph:${context.topic.id}`);
+  safeRevalidatePath("/");
+  safeRevalidatePath("/ingest");
+  safeRevalidatePath("/graph");
+}
+
+function topicFor(topicId?: string): Topic {
+  if (!topicId || topicId === demoTopic.id) return demoTopic;
+  return { ...demoTopic, id: topicId, hydraSubTenantId: `wikithon-${topicId}` };
+}
+
+async function ensureEntity(input: { raw: string; canonicalName: string; entityType: Entity["entityType"]; topic: Topic }) {
+  const existing =
+    (await store.findEntityByAlias(input.canonicalName, input.topic.id)) ?? (await findEntityByAlias(input.canonicalName)) ?? (await findEntityByAlias(input.raw));
+  const entity: Entity =
+    existing ??
+    ({
+      id: slugify(input.canonicalName),
+      topicId: input.topic.id,
+      canonicalName: input.canonicalName,
+      entityType: input.entityType,
+      hydraEntityId: null,
+      firstSeen: new Date().toISOString(),
+    } satisfies Entity);
+
+  await store.upsertEntityWithAliases({ entity: { ...entity, topicId: input.topic.id }, aliases: [input.raw, input.canonicalName] });
+  return { ...entity, topicId: input.topic.id };
+}
+
+async function safeUpsertSource(source: Source) {
+  try {
+    await store.upsertSource(source);
+  } catch {
+    // Demo fallback remains usable when the DB worker's store is unavailable.
+  }
+}
+
+async function safeUpdateSourceStatus(sourceId: string, status: HydraStatus) {
+  try {
+    await store.updateSourceStatus(sourceId, status);
+  } catch {
+    // Best effort: status visibility should not kill deterministic ingest tests.
+  }
+}
+
+function safeRevalidateTag(tag: string) {
+  try {
+    (revalidateTag as (tag: string) => void)(tag);
+  } catch {
+    // Cache invalidation is best effort in tests and local fallback mode.
+  }
+}
+
+function safeRevalidatePath(path: string) {
+  try {
+    revalidatePath(path);
+  } catch {
+    // Cache invalidation is best effort in tests and local fallback mode.
+  }
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }

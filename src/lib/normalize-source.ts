@@ -8,27 +8,95 @@ export interface NormalizedSource {
   bodyText: string;
 }
 
+const DEFAULT_TEXT_LIMIT = 48_000;
+
 export async function normalizeUrl(url: string): Promise<NormalizedSource> {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+  if (!response.ok) {
+    if (response.status >= 500) return normalizeViaJina(url);
+    throw new Error(`Fetch failed: ${response.status}`);
+  }
   const html = await response.text();
   const dom = new JSDOM(html, { url });
+  const metadata = extractMetadata(dom.window.document, url);
   const article = new Readability(dom.window.document).parse();
   if (article?.textContent) {
-    return { title: article.title || new URL(url).hostname, publisher: new URL(url).hostname.replace(/^www\./, ""), publishedAt: null, bodyText: article.textContent };
+    return {
+      title: article.title || metadata.title,
+      publisher: metadata.publisher,
+      publishedAt: metadata.publishedAt,
+      bodyText: truncateText(article.textContent),
+    };
   }
   return normalizeViaJina(url);
 }
 
 export async function normalizeViaJina(url: string): Promise<NormalizedSource> {
-  const jinaUrl = `https://r.jina.ai/http://r.jina.ai/http://${url.replace(/^https?:\/\//, "")}`;
+  const parsed = new URL(url);
+  const jinaUrl = `https://r.jina.ai/${parsed.href}`;
   const response = await fetch(jinaUrl);
   if (!response.ok) throw new Error(`Jina fetch failed: ${response.status}`);
   const text = await response.text();
-  return { title: new URL(url).hostname, publisher: new URL(url).hostname.replace(/^www\./, ""), publishedAt: null, bodyText: text };
+  const metadata = extractTextMetadata(text, url);
+  return {
+    title: metadata.title,
+    publisher: metadata.publisher,
+    publishedAt: metadata.publishedAt,
+    bodyText: truncateText(text),
+  };
 }
 
 export async function normalizePdf(file: File): Promise<NormalizedSource> {
   void file;
   return { title: "Uploaded PDF", publisher: "PDF upload", publishedAt: null, bodyText: "PDF text extraction is available for text PDFs in deployed runtime." };
+}
+
+export function truncateText(text: string, maxChars = DEFAULT_TEXT_LIMIT) {
+  const normalized = text.replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (normalized.length <= maxChars) return normalized;
+  const half = Math.floor((maxChars - 80) / 2);
+  return `${normalized.slice(0, half)}\n\n[...source truncated...]\n\n${normalized.slice(-half)}`;
+}
+
+function extractMetadata(document: Document, url: string) {
+  const fallback = fallbackMetadata(url);
+  const title =
+    meta(document, "property", "og:title") ??
+    meta(document, "name", "twitter:title") ??
+    document.querySelector("title")?.textContent?.trim() ??
+    fallback.title;
+  const publisher =
+    meta(document, "property", "og:site_name") ??
+    meta(document, "name", "application-name") ??
+    meta(document, "name", "publisher") ??
+    fallback.publisher;
+  const rawPublishedAt =
+    meta(document, "property", "article:published_time") ??
+    meta(document, "name", "date") ??
+    meta(document, "name", "pubdate") ??
+    document.querySelector("time[datetime]")?.getAttribute("datetime");
+
+  return { title, publisher, publishedAt: normalizeDate(rawPublishedAt) };
+}
+
+function extractTextMetadata(text: string, url: string) {
+  const fallback = fallbackMetadata(url);
+  const title = text.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? text.match(/^Title:\s*(.+)$/im)?.[1]?.trim() ?? fallback.title;
+  const publishedAt = normalizeDate(text.match(/^Published(?: Time| Date)?:\s*(.+)$/im)?.[1]?.trim() ?? null);
+  return { title, publisher: fallback.publisher, publishedAt };
+}
+
+function meta(document: Document, attr: "name" | "property", value: string) {
+  return document.querySelector(`meta[${attr}="${value}"]`)?.getAttribute("content")?.trim() || null;
+}
+
+function normalizeDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function fallbackMetadata(url: string) {
+  const hostname = new URL(url).hostname.replace(/^www\./, "");
+  return { title: hostname, publisher: hostname };
 }
