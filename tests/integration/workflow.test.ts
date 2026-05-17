@@ -50,9 +50,9 @@ describe("ingest workflow", () => {
     expect(result.hydraStatus!.status).toBe("success");
     expect(result.claims[0]).toMatchObject({ entity: "GPT-5", stance: "leak" });
     expect(result.touchedEntityIds).toContain("gpt-5");
-    expect(cache.revalidateTag).toHaveBeenCalledWith("entity:gpt-5");
-    expect(cache.revalidateTag).toHaveBeenCalledWith("topic:ai-industry");
-    expect(cache.revalidateTag).toHaveBeenCalledWith("graph:ai-industry");
+    expect(cache.revalidateTag).toHaveBeenCalledWith("entity:gpt-5", "max");
+    expect(cache.revalidateTag).toHaveBeenCalledWith("topic:ai-industry", "max");
+    expect(cache.revalidateTag).toHaveBeenCalledWith("graph:ai-industry", "max");
   });
 
   test("maps completed Hydra provider status to local success", async () => {

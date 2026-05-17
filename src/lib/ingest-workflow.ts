@@ -234,7 +234,7 @@ async function safeUpdateSourceStatus(sourceId: string, status: HydraStatus) {
 
 function safeRevalidateTag(tag: string) {
   try {
-    (revalidateTag as (tag: string) => void)(tag);
+    (revalidateTag as unknown as (tag: string, profile: string) => void)(tag, "max");
   } catch {
     // Cache invalidation is best effort in tests and local fallback mode.
   }
@@ -253,6 +253,8 @@ function mapProviderStatusToHydraStatus(status: string): HydraStatus {
     case "queued":
       return "queued";
     case "in_progress":
+    case "processing":
+    case "graph_creation":
       return "in_progress";
     case "success":
     case "complete":
