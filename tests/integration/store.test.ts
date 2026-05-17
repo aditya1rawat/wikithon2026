@@ -69,6 +69,7 @@ describe("memory store fallback", () => {
     const secondSaved = await store.saveQuery("What shipped?", "New Model shipped again.", [sourceId]);
     const page = await store.getEntityPage("newmodel");
     const dashboard = await store.getDashboard();
+    const graph = await store.getGraphData();
 
     expect((await store.listSources()).map((item) => item.id)).toEqual([sourceId]);
     expect(await store.getSource(sourceId)).toMatchObject({ id: sourceId, hydraStatus: "success" });
@@ -82,6 +83,10 @@ describe("memory store fallback", () => {
     expect(page?.lede?.lede).toContain("launch claim");
     expect(dashboard.stats.sources).toBe(1);
     expect(dashboard.stats.claims).toBe(1);
+    expect(graph.nodes.map((node) => node.id).sort()).toEqual(["new-model", `source:${sourceId}`]);
+    expect(graph.edges).toEqual([
+      expect.objectContaining({ source: `source:${sourceId}`, target: "new-model", relation: "mentions" }),
+    ]);
     expect((await store.getSavedQuery(saved.slug))?.id).toBe(saved.id);
     expect(secondSaved.id).not.toBe(saved.id);
     expect(secondSaved.slug).not.toBe(saved.slug);

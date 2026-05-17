@@ -575,14 +575,34 @@ function buildEntityPage(snapshot: StoreSnapshot, slug: string): EntityPage | nu
 }
 
 function buildGraphData(snapshot: StoreSnapshot): GraphData {
-  const nodes = snapshot.entities.map((entity) => ({
+  const entityNodes = snapshot.entities.map((entity) => ({
     id: entity.id,
     label: entity.canonicalName,
     type: entity.entityType,
     claimCount: snapshot.claims.filter((claim) => claim.entityId === entity.id).length,
   }));
+  const sourceNodes = snapshot.sources.map((source) => ({
+    id: `source:${source.id}`,
+    label: source.title,
+    type: "SOURCE" as const,
+    claimCount: snapshot.claims.filter((claim) => claim.sourceId === source.id).length,
+  }));
+  const citationPairs = new Set<string>();
+  const citationEdges = snapshot.claims.flatMap((claim) => {
+    const key = `${claim.sourceId}:${claim.entityId}`;
+    if (citationPairs.has(key)) return [];
+    citationPairs.add(key);
+    return [{
+      id: `mentions-${citationPairs.size}`,
+      source: `source:${claim.sourceId}`,
+      target: claim.entityId,
+      relation: "mentions" as const,
+      label: "mentions",
+      rationale: "Source contains at least one extracted claim for this entity.",
+    }];
+  });
   const claimToEntity = new Map(snapshot.claims.map((claim) => [claim.id, claim.entityId]));
-  const edges = snapshot.relations
+  const relationEdges = snapshot.relations
     .map((relation, index) => {
       const source = claimToEntity.get(relation.claimA);
       const target = claimToEntity.get(relation.claimB);
@@ -597,7 +617,7 @@ function buildGraphData(snapshot: StoreSnapshot): GraphData {
       };
     })
     .filter((edge): edge is NonNullable<typeof edge> => Boolean(edge));
-  return { topic: snapshot.topic, nodes, edges };
+  return { topic: snapshot.topic, nodes: [...entityNodes, ...sourceNodes], edges: [...citationEdges, ...relationEdges] };
 }
 
 function findEntityInSnapshot(snapshot: StoreSnapshot, value: string) {

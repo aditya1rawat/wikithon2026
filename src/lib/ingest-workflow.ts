@@ -105,7 +105,7 @@ export async function hydraUpload(context: WorkflowContext) {
 }
 
 export async function pollHydraStatus(context: WorkflowContext) {
-  const hydraStatus = await pollHydraProviderStatus(context.source.id);
+  const hydraStatus = await pollHydraProviderStatus(context.source.id, { ceilingMs: 10_000 });
   context.hydraStatus = hydraStatus;
   await safeUpdateSourceStatus(context.source.id, mapProviderStatusToHydraStatus(hydraStatus.status));
   return hydraStatus;

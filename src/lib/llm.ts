@@ -39,7 +39,7 @@ export async function complete(prompt: string, options: CompleteOptions = {}) {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: process.env.NIM_MODEL ?? "nvidia/llama-3.1-nemotron-70b-instruct",
+          model: process.env.NIM_MODEL ?? "meta/llama-3.1-8b-instruct",
           messages: [
             { role: "system", content: options.system ?? "You are a precise ConsensusWiki extraction assistant." },
             { role: "user", content: prompt },
@@ -81,7 +81,12 @@ ${truncateForPrompt(text)}`;
   const retryPrompt = `${prompt}
 
 The previous response was invalid. JSON only. No markdown, prose, comments, or trailing commas.`;
-  return completeJson(prompt, ClaimExtractionSchema, retryPrompt).then((result) => result.claims);
+  try {
+    const result = await completeJson(prompt, ClaimExtractionSchema, retryPrompt);
+    return result.claims.length ? result.claims : fallbackExtractClaims(text);
+  } catch {
+    return fallbackExtractClaims(text);
+  }
 }
 
 export async function canonicalizeEntities(rawEntities: string[]) {
@@ -99,7 +104,11 @@ ${JSON.stringify(unique)}`;
   const retryPrompt = `${prompt}
 
 The previous response was invalid. JSON only. Return only the object with an entities array.`;
-  return completeJson(prompt, CanonicalEntityBatchSchema, retryPrompt).then((result) => result.entities);
+  try {
+    return (await completeJson(prompt, CanonicalEntityBatchSchema, retryPrompt)).entities;
+  } catch {
+    return unique.map(fallbackCanonicalEntity);
+  }
 }
 
 export async function judgeContradictions(a: string, b: string) {
@@ -117,7 +126,11 @@ Claim B: ${b}`;
   const retryPrompt = `${prompt}
 
 The previous response was invalid. JSON only. No markdown or extra text.`;
-  return completeJson(prompt, JudgementSchema, retryPrompt);
+  try {
+    return await completeJson(prompt, JudgementSchema, retryPrompt);
+  } catch {
+    return fallbackJudgement(a, b);
+  }
 }
 
 export async function synthesizeLede(entityName: string, claims: string[]) {
@@ -155,12 +168,40 @@ function fallbackCompletion(prompt: string) {
   return "Demo fallback response. Configure NIM_API_KEY for live synthesis.";
 }
 
+function fallbackExtractClaims(text: string) {
+  const sentences = text
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 40 && sentence.length < 260)
+    .slice(0, 5);
+  const claims = sentences.map((sentence) => ({
+    entity: inferEntity(sentence),
+    claim: sentence,
+    stance: "factual" as const,
+    confidence: 0.62,
+  }));
+  return ClaimExtractionSchema.parse({ claims }).claims;
+}
+
+function inferEntity(sentence: string) {
+  const model = sentence.match(/\bGPT-\d(?:\.\d+)?(?:\s+[A-Z][a-z]+)?\b/)?.[0];
+  if (model) return model;
+  if (/OpenAI/i.test(sentence)) return "OpenAI";
+  return sentence.match(/\b[A-Z][A-Za-z0-9.-]+(?:\s+[A-Z][A-Za-z0-9.-]+){0,2}\b/)?.[0] ?? "Unknown";
+}
+
 function fallbackCanonicalEntity(raw: string) {
   return CanonicalEntitySchema.parse({
     raw,
     canonicalName: raw.replace(/gpt\s?5/i, "GPT-5").replace(/open ai/i, "OpenAI"),
     entityType: /gpt|claude/i.test(raw) ? "MODEL" : /sam/i.test(raw) ? "PERSON" : "ORG",
   });
+}
+
+function fallbackJudgement(a: string, b: string) {
+  const relation = /not|late|dispute|non-public|contradict/i.test(`${a} ${b}`) ? "contradict" : "unrelated";
+  return JudgementSchema.parse({ relation, rationale: "Deterministic fallback used because the judgement provider was unavailable.", confidence: 0.5 });
 }
 
 async function completeJson<T>(prompt: string, schema: z.ZodType<T>, retryPrompt: string): Promise<T> {

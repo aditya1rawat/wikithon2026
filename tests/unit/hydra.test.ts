@@ -95,4 +95,18 @@ describe("Hydra fallback", () => {
     await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 200 })).resolves.toMatchObject({ status: "strange_done" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  test("returns last non-terminal status when polling reaches the ceiling", async () => {
+    process.env = {
+      ...originalEnv,
+      HYDRA_API_KEY: "test-key",
+      HYDRA_TENANT_ID: "tenant-1",
+      HYDRA_BASE_URL: "https://hydra.test",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ statuses: [{ file_id: "s1", indexing_status: "queued" }] }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 5 })).resolves.toMatchObject({ status: "queued", timedOut: true });
+    expect(fetchMock).toHaveBeenCalled();
+  });
 });

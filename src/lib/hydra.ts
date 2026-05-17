@@ -58,10 +58,12 @@ export async function pollHydraStatus(sourceId: string, options: HydraPollOption
   const ceilingMs = options.ceilingMs ?? POLL_CEILING_MS;
   const startedAt = Date.now();
   let transientFailures = 0;
+  let lastStatus: { sourceId?: string; status: string; [key: string]: unknown } | null = null;
 
   while (Date.now() - startedAt <= ceilingMs) {
     try {
       const status = await readHydraStatus(sourceId);
+      lastStatus = status;
       if (TERMINAL_STATUSES.has(status.status) || !NON_TERMINAL_STATUSES.has(status.status)) return status;
       transientFailures = 0;
     } catch (error) {
@@ -71,6 +73,7 @@ export async function pollHydraStatus(sourceId: string, options: HydraPollOption
     await sleep(intervalMs);
   }
 
+  if (lastStatus) return { ...lastStatus, timedOut: true };
   throw new Error(`Hydra status polling timed out after ${ceilingMs}ms for ${sourceId}`);
 }
 

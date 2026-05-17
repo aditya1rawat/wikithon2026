@@ -52,14 +52,14 @@ export async function updateSourceStatus(id: string, status: HydraStatus) {
 export async function upsertEntityWithAliases(input: { entity: Entity; aliases?: string[] }) {
   const entity = await store.upsertEntityWithAliases(input);
   revalidateTopicViews();
-  revalidatePath(`/wiki/${entity.id}`);
+  safeRevalidatePath(`/wiki/${entity.id}`);
   return entity;
 }
 
 export async function insertClaims(claims: Claim[]) {
   const saved = await store.insertClaims(claims);
   revalidateTopicViews();
-  for (const claim of saved) revalidatePath(`/wiki/${claim.entityId}`);
+  for (const claim of saved) safeRevalidatePath(`/wiki/${claim.entityId}`);
   return saved;
 }
 
@@ -71,13 +71,13 @@ export async function insertClaimRelations(relations: ClaimRelation[]) {
 
 export async function upsertLede(lede: Lede) {
   const saved = await store.upsertLede(lede);
-  revalidatePath(`/wiki/${lede.entityId}`);
+  safeRevalidatePath(`/wiki/${lede.entityId}`);
   return saved;
 }
 
 export async function saveQuery(question: string, answerMd: string, citedSourceIds: string[] = []) {
   const saved = await store.saveQuery(question, answerMd, citedSourceIds);
-  revalidatePath(`/wiki/q/${saved.slug}`);
+  safeRevalidatePath(`/wiki/q/${saved.slug}`);
   return saved;
 }
 
@@ -112,7 +112,15 @@ export async function synthesizeDemoAnswer(question: string) {
 }
 
 function revalidateTopicViews() {
-  revalidatePath("/");
-  revalidatePath("/ingest");
-  revalidatePath("/graph");
+  safeRevalidatePath("/");
+  safeRevalidatePath("/ingest");
+  safeRevalidatePath("/graph");
+}
+
+function safeRevalidatePath(path: string) {
+  try {
+    revalidatePath(path);
+  } catch {
+    // Revalidation is best effort when service helpers run outside a Next request.
+  }
 }
