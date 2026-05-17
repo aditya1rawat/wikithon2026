@@ -608,12 +608,18 @@ function buildGraphData(snapshot: StoreSnapshot): GraphData {
     type: entity.entityType,
     claimCount: snapshot.claims.filter((claim) => claim.entityId === entity.id).length,
   }));
-  const sourceNodes = snapshot.sources.map((source) => ({
-    id: `source:${source.id}`,
-    label: source.title,
-    type: "SOURCE" as const,
-    claimCount: snapshot.claims.filter((claim) => claim.sourceId === source.id).length,
-  }));
+  const sourceClaimCount = new Map<string, number>();
+  for (const claim of snapshot.claims) {
+    sourceClaimCount.set(claim.sourceId, (sourceClaimCount.get(claim.sourceId) ?? 0) + 1);
+  }
+  const sourceNodes = snapshot.sources
+    .filter((source) => (sourceClaimCount.get(source.id) ?? 0) > 0)
+    .map((source) => ({
+      id: `source:${source.id}`,
+      label: source.title,
+      type: "SOURCE" as const,
+      claimCount: sourceClaimCount.get(source.id) ?? 0,
+    }));
   const citationPairs = new Set<string>();
   const citationEdges = snapshot.claims.flatMap((claim) => {
     const key = `${claim.sourceId}:${claim.entityId}`;

@@ -181,4 +181,63 @@ describe("memory store fallback", () => {
     expect(secondSaved.id).not.toBe(saved.id);
     expect(secondSaved.slug).not.toBe(saved.slug);
   });
+
+  test("graph omits source nodes that have zero claims", async () => {
+    const store = createMemoryStore({ seedDemoData: false });
+    await store.upsertTopic(demoTopic);
+
+    const usedSourceId = stableSourceId(demoTopic.id, "https://example.com/used");
+    const orphanSourceId = stableSourceId(demoTopic.id, "https://example.com/orphan");
+    await store.upsertSource({
+      id: usedSourceId,
+      topicId: demoTopic.id,
+      url: "https://example.com/used",
+      title: "Used",
+      publisher: "Example",
+      publishedAt: "2026-05-17T00:00:00.000Z",
+      ingestedAt: "2026-05-17T00:00:00.000Z",
+      hydraStatus: "success",
+      workflowStatus: "complete",
+      workflowRunId: "wf-used",
+    });
+    await store.upsertSource({
+      id: orphanSourceId,
+      topicId: demoTopic.id,
+      url: "https://example.com/orphan",
+      title: "Orphan",
+      publisher: "Example",
+      publishedAt: "2026-05-17T00:00:00.000Z",
+      ingestedAt: "2026-05-17T00:00:00.000Z",
+      hydraStatus: "queued",
+      workflowStatus: "pending",
+      workflowRunId: "wf-orphan",
+    });
+    const entity = await store.upsertEntityWithAliases({
+      entity: {
+        id: "model-x",
+        topicId: demoTopic.id,
+        canonicalName: "Model X",
+        entityType: "MODEL",
+        hydraEntityId: null,
+        firstSeen: "2026-05-17T00:00:00.000Z",
+      },
+      aliases: ["Model X"],
+    });
+    await store.insertClaims([
+      {
+        id: stableClaimId(usedSourceId, "Model X shipped."),
+        sourceId: usedSourceId,
+        entityId: entity.id,
+        claimText: "Model X shipped.",
+        stance: "factual",
+        confidence: 0.9,
+        chunkUuid: null,
+        extractedAt: "2026-05-17T00:00:00.000Z",
+      },
+    ]);
+
+    const graph = await store.getGraphData();
+    const sourceNodes = graph.nodes.filter((node) => node.id.startsWith("source:"));
+    expect(sourceNodes.map((node) => node.id)).toEqual([`source:${usedSourceId}`]);
+  });
 });
