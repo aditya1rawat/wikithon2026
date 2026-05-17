@@ -9,7 +9,7 @@ describe("source normalization", () => {
   test("falls back to Jina on primary fetch rejection", async () => {
     const fetchMock = vi
       .fn()
-      .mockRejectedValueOnce(new Error("blocked"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
       .mockResolvedValueOnce({
         ok: true,
         text: async () => "# Fallback title\n\nPublished Date: 2026-05-16\n\nBody from Jina",

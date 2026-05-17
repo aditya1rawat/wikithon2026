@@ -22,9 +22,12 @@ export async function normalizeUrl(url: string): Promise<NormalizedSource> {
       headers: { "User-Agent": DEFAULT_UA, accept: "text/html,application/xhtml+xml" },
       signal: controller.signal,
     });
-  } catch {
+  } catch (error) {
     clearTimeout(timer);
-    return normalizeViaJina(url);
+    const isAbort = error instanceof DOMException && error.name === "AbortError";
+    const isNetworkError = error instanceof TypeError;
+    if (isAbort || isNetworkError) return normalizeViaJina(url);
+    throw error;
   }
   clearTimeout(timer);
   if (!response.ok) {
