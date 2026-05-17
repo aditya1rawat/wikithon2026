@@ -1,3 +1,4 @@
+-- Initial schema for fresh ConsensusWiki databases; no backfill required.
 CREATE TABLE topics (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -66,6 +67,7 @@ CREATE TABLE ledes (
 CREATE TABLE saved_queries (
   id TEXT PRIMARY KEY,
   topic_id TEXT REFERENCES topics(id),
+  slug TEXT UNIQUE NOT NULL,
   question TEXT NOT NULL,
   answer_md TEXT NOT NULL,
   cited_source_ids TEXT[],

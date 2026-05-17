@@ -14,19 +14,30 @@ export default async function GraphPage() {
       </section>
       <TopicGraph data={data} />
       <Card>
-        <CardHeader><CardTitle>Edges fallback</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Edges table fallback</CardTitle>
+        </CardHeader>
         <CardContent>
+          <p className="mb-4 text-sm leading-6 text-muted-foreground">
+            Table fallback is always available when the graph renderer is unavailable or hard to inspect during the demo.
+          </p>
           <Table>
             <TableHeader><TableRow><TableHead>Source</TableHead><TableHead>Target</TableHead><TableHead>Relation</TableHead><TableHead>Rationale</TableHead></TableRow></TableHeader>
             <TableBody>
-              {data.edges.map((edge) => (
-                <TableRow key={edge.id}>
-                  <TableCell>{data.nodes.find((node) => node.id === edge.source)?.label}</TableCell>
-                  <TableCell>{data.nodes.find((node) => node.id === edge.target)?.label}</TableCell>
-                  <TableCell><Badge variant={edge.relation === "contradict" ? "destructive" : "secondary"}>{edge.relation}</Badge></TableCell>
-                  <TableCell>{edge.rationale}</TableCell>
+              {data.edges.length ? (
+                data.edges.map((edge) => (
+                  <TableRow key={edge.id}>
+                    <TableCell>{data.nodes.find((node) => node.id === edge.source)?.label ?? edge.source}</TableCell>
+                    <TableCell>{data.nodes.find((node) => node.id === edge.target)?.label ?? edge.target}</TableCell>
+                    <TableCell><Badge variant={edge.relation === "contradict" ? "destructive" : "secondary"}>{edge.relation}</Badge></TableCell>
+                    <TableCell>{edge.rationale ?? "No rationale stored."}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">No graph edges yet. Ingest more sources to build relations.</TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>
