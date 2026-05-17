@@ -1,12 +1,12 @@
 -- Initial schema for fresh ConsensusWiki databases; no backfill required.
-CREATE TABLE topics (
+CREATE TABLE IF NOT EXISTS topics (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   hydra_sub_tenant_id TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE sources (
+CREATE TABLE IF NOT EXISTS sources (
   id TEXT PRIMARY KEY,
   topic_id TEXT REFERENCES topics(id),
   url TEXT,
@@ -18,7 +18,7 @@ CREATE TABLE sources (
   workflow_run_id TEXT
 );
 
-CREATE TABLE entities (
+CREATE TABLE IF NOT EXISTS entities (
   id TEXT PRIMARY KEY,
   topic_id TEXT REFERENCES topics(id),
   canonical_name TEXT NOT NULL,
@@ -28,13 +28,13 @@ CREATE TABLE entities (
   UNIQUE (topic_id, canonical_name)
 );
 
-CREATE TABLE entity_aliases (
+CREATE TABLE IF NOT EXISTS entity_aliases (
   alias TEXT NOT NULL,
   entity_id TEXT REFERENCES entities(id),
   PRIMARY KEY (alias, entity_id)
 );
 
-CREATE TABLE claims (
+CREATE TABLE IF NOT EXISTS claims (
   id TEXT PRIMARY KEY,
   source_id TEXT REFERENCES sources(id) ON DELETE CASCADE,
   entity_id TEXT REFERENCES entities(id),
@@ -45,9 +45,9 @@ CREATE TABLE claims (
   extracted_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX claims_entity_extracted_idx ON claims (entity_id, extracted_at DESC);
+CREATE INDEX IF NOT EXISTS claims_entity_extracted_idx ON claims (entity_id, extracted_at DESC);
 
-CREATE TABLE claim_relations (
+CREATE TABLE IF NOT EXISTS claim_relations (
   claim_a TEXT REFERENCES claims(id) ON DELETE CASCADE,
   claim_b TEXT REFERENCES claims(id) ON DELETE CASCADE,
   relation TEXT NOT NULL,
@@ -57,14 +57,14 @@ CREATE TABLE claim_relations (
   PRIMARY KEY (claim_a, claim_b)
 );
 
-CREATE TABLE ledes (
+CREATE TABLE IF NOT EXISTS ledes (
   entity_id TEXT PRIMARY KEY REFERENCES entities(id),
   lede TEXT NOT NULL,
   source_count_at_gen INT,
   generated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE saved_queries (
+CREATE TABLE IF NOT EXISTS saved_queries (
   id TEXT PRIMARY KEY,
   topic_id TEXT REFERENCES topics(id),
   slug TEXT UNIQUE NOT NULL,
