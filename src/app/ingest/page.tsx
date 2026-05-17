@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Clock3, FileText, RotateCcw, UploadCloud } from "lucide-react";
-import { ingestSource } from "./actions";
+import { ingestSource, retryIngest } from "./actions";
 import { listSources } from "@/lib/app-service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,9 +63,12 @@ export default async function IngestPage() {
               {isFailed(source.workflowStatus) ? (
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3">
                   <p className="text-sm text-destructive">Pipeline stopped at {source.workflowStatus}. Retry will re-run from the failed step.</p>
-                  <Button type="button" size="sm" variant="outline">
-                    <RotateCcw className="h-4 w-4" /> Retry failed step
-                  </Button>
+                  <form action={retryIngest}>
+                    <input type="hidden" name="sourceId" value={source.id} />
+                    <Button type="submit" size="sm" variant="outline">
+                      <RotateCcw className="h-4 w-4" /> Retry failed step
+                    </Button>
+                  </form>
                 </div>
               ) : null}
             </div>
