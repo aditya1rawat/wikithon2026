@@ -40,8 +40,8 @@ export async function runIngestWorkflow(input: WorkflowInput) {
   }
   try {
     await pollHydraStatus(context);
-  } catch {
-    // Hydra failure does not block local pipeline.
+  } catch (error) {
+    console.error("[ingest] Hydra poll failed, continuing local pipeline:", error);
     await safeUpdateHydraStatus(context.source.id, "errored");
   }
   await safeUpdateWorkflowStatus(context.source.id, "extracting");
