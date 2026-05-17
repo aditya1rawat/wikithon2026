@@ -1,6 +1,6 @@
 "use server";
 
-import { getSource, registerDemoIngest, updateSourceWorkflowStatus } from "@/lib/app-service";
+import { getSource, registerDemoIngest, updateSourceStatus, updateSourceWorkflowStatus } from "@/lib/app-service";
 import { runIngestWorkflow } from "@/lib/ingest-workflow";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -11,6 +11,7 @@ export async function retryIngest(formData: FormData) {
     const source = await getSource(sourceId);
     if (source?.url) {
       await updateSourceWorkflowStatus(sourceId, "pending");
+      await updateSourceStatus(sourceId, "queued");
       await after(async () => {
         try {
           await runIngestWorkflow(source.url!);

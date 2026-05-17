@@ -47,8 +47,11 @@ describe("retryIngest", () => {
   });
 
   test("no-ops when sourceId is missing", async () => {
+    const appService = await import("@/lib/app-service");
+    const updateSpy = vi.spyOn(appService, "updateSourceWorkflowStatus");
     const { retryIngest } = await import("@/app/ingest/actions");
     const form = new FormData();
     await expect(retryIngest(form)).rejects.toThrow("NEXT_REDIRECT");
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 });
