@@ -1,5 +1,6 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { registerDemoIngest } from "./app-service";
+import { slugify } from "./utils";
 import { demoTopic, stableClaimId } from "./demo-data";
 import { pollHydraStatus as pollHydraProviderStatus, uploadKnowledge } from "./hydra";
 import { canonicalizeEntities, extractClaims, judgeContradictions, synthesizeLede } from "./llm";
@@ -310,6 +311,3 @@ function mapProviderStatusToHydraStatus(status: string): HydraStatus {
   }
 }
 
-function slugify(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-}

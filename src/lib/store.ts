@@ -1,5 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { randomUUID } from "crypto";
+import { slugify } from "./utils";
 import {
   demoAliases,
   demoClaimRelations,
@@ -666,10 +667,6 @@ function findEntityInSnapshot(snapshot: StoreSnapshot, value: string) {
 
 function sortByPublishedAtDesc(a: Source, b: Source) {
   return Date.parse(b.publishedAt ?? b.ingestedAt) - Date.parse(a.publishedAt ?? a.ingestedAt);
-}
-
-function slugify(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
 function savedQueryIdentity(question: string) {
