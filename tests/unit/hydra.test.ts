@@ -109,4 +109,36 @@ describe("Hydra fallback", () => {
     await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 5 })).resolves.toMatchObject({ status: "queued", timedOut: true });
     expect(fetchMock).toHaveBeenCalled();
   });
+
+  test("tolerates up to two transient failures before throwing", async () => {
+    process.env = {
+      ...originalEnv,
+      HYDRA_API_KEY: "test-key",
+      HYDRA_TENANT_ID: "tenant-1",
+      HYDRA_BASE_URL: "https://hydra.test",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("net 1"))
+      .mockRejectedValueOnce(new Error("net 2"))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ statuses: [{ file_id: "s1", indexing_status: "completed" }] }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 200 })).resolves.toMatchObject({ status: "completed" });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  test("throws when transient failures exceed tolerance", async () => {
+    process.env = {
+      ...originalEnv,
+      HYDRA_API_KEY: "test-key",
+      HYDRA_TENANT_ID: "tenant-1",
+      HYDRA_BASE_URL: "https://hydra.test",
+    };
+    const fetchMock = vi.fn().mockRejectedValue(new Error("net"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 200 })).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
 });

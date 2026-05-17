@@ -20,6 +20,7 @@ const POLL_INTERVAL_MS = 2_000;
 const POLL_CEILING_MS = 90_000;
 const NON_TERMINAL_STATUSES = new Set(["queued", "in_progress", "processing", "graph_creation"]);
 const TERMINAL_STATUSES = new Set(["success", "complete", "completed", "errored", "error", "failed"]);
+const MAX_TRANSIENT_FAILURES = 3;
 
 const baseUrl = () => (process.env.HYDRA_BASE_URL ?? "https://api.hydradb.com").replace(/\/$/, "");
 
@@ -68,7 +69,7 @@ export async function pollHydraStatus(sourceId: string, options: HydraPollOption
       transientFailures = 0;
     } catch (error) {
       transientFailures += 1;
-      if (transientFailures > 1) throw error;
+      if (transientFailures >= MAX_TRANSIENT_FAILURES) throw error;
     }
     await sleep(intervalMs);
   }
