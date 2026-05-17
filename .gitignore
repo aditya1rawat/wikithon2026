@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+
+# next
+.next/
+out/
+build/
+
+# test output
+coverage/
+test-results/
+playwright-report/
+
+# env
+.env
+.env*.local
+!.env.example
+
+# local agent/editor state
+.agents/
+.claude/
+skills-lock.json
+
+# system
+.DS_Store
+docs/.DS_Store
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*

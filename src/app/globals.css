@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7fafc;
+  --foreground: #122033;
+  --card: #ffffff;
+  --card-foreground: #122033;
+  --primary: #1667b7;
+  --primary-foreground: #ffffff;
+  --secondary: #dff5f0;
+  --secondary-foreground: #16443c;
+  --muted: #e7edf4;
+  --muted-foreground: #536170;
+  --accent: #f6c94b;
+  --accent-foreground: #3b2607;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #cbd7e4;
+  --input: #cbd7e4;
+  --ring: #1667b7;
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(246, 201, 75, 0.18), transparent 30rem),
+    linear-gradient(180deg, #f7fafc, #eef5fb);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
