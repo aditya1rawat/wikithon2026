@@ -207,8 +207,8 @@ export async function synthesizeLedesStep(context: WorkflowContext) {
         sourceCountAtGen: page.sources.length,
         generatedAt: new Date().toISOString(),
       });
-    } catch {
-      // Lede generation is best-effort; entity page already renders without one.
+    } catch (error) {
+      console.warn(`[ingest] lede synthesis or upsert failed for ${entityId}:`, error);
     }
   }
 }
