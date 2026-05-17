@@ -103,6 +103,25 @@ describe("ingest workflow", () => {
     expect(source?.workflowStatus).toBe("complete");
   }, 20_000);
 
+  test("workflow writes a lede for every touched entity", async () => {
+    process.env = { ...originalEnv, NIM_API_KEY: "", HYDRA_API_KEY: "" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => `<html><head><title>t</title></head><body><article><p>OpenAI released GPT-5 as a generally available model in May 2026.</p></article></body></html>`,
+      })
+    );
+
+    const result = await runIngestWorkflow("https://example.com/lede-check");
+    const { getEntityPage } = await import("@/lib/app-service");
+
+    for (const entityId of result.touchedEntityIds) {
+      const page = await getEntityPage(entityId);
+      expect(page?.lede?.lede).toBeTruthy();
+    }
+  });
+
   test("maps completed Hydra provider status to local success", async () => {
     process.env = {
       ...originalEnv,

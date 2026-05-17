@@ -114,7 +114,7 @@ ${JSON.stringify(unique)}`;
 The previous response was invalid. JSON only. Return only the object with an entities array.`;
   try {
     const result = await completeJson(prompt, CanonicalEntityBatchSchema, retryPrompt);
-    return result.entities.map((entity) => ({ ...entity, aliases: dedupeAliases([entity.canonicalName, ...entity.aliases]) }));
+    return result.entities.map((entity) => ({ ...entity, aliases: dedupeAliases([entity.canonicalName, ...(entity.aliases ?? [])]) }));
   } catch {
     return unique.map(fallbackCanonicalEntity);
   }

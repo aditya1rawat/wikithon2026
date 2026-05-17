@@ -2,7 +2,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { registerDemoIngest } from "./app-service";
 import { demoTopic, stableClaimId } from "./demo-data";
 import { pollHydraStatus as pollHydraProviderStatus, uploadKnowledge } from "./hydra";
-import { canonicalizeEntities, extractClaims, judgeContradictions } from "./llm";
+import { canonicalizeEntities, extractClaims, judgeContradictions, synthesizeLede } from "./llm";
 import { normalizeUrl, type NormalizedSource } from "./normalize-source";
 import { store } from "./store";
 import type { Claim, ClaimRelation, Entity, HydraStatus, Source, Topic, WorkflowStatus } from "./types";
@@ -48,6 +48,7 @@ export async function runIngestWorkflow(input: WorkflowInput) {
   await extractClaimsStep(context);
   await safeUpdateWorkflowStatus(context.source.id, "judging");
   await judgeContradictionsStep(context);
+  await synthesizeLedesStep(context);
   await safeUpdateWorkflowStatus(context.source.id, "complete");
   await invalidateCacheStep(context);
 
@@ -189,6 +190,27 @@ export async function judgeContradictionsStep(context: WorkflowContext) {
   if (relations.length > 0) await store.insertClaimRelations(relations);
   context.relations = relations;
   return relations;
+}
+
+export async function synthesizeLedesStep(context: WorkflowContext) {
+  const touched = context.touchedEntityIds ?? [];
+  for (const entityId of touched) {
+    const page = await store.getEntityPage(entityId, context.topic.id);
+    if (!page) continue;
+    const claimTexts = page.claims.map((claim) => claim.claimText);
+    if (claimTexts.length === 0) continue;
+    try {
+      const lede = await synthesizeLede(page.entity.canonicalName, claimTexts);
+      await store.upsertLede({
+        entityId,
+        lede,
+        sourceCountAtGen: page.sources.length,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch {
+      // Lede generation is best-effort; entity page already renders without one.
+    }
+  }
 }
 
 export async function invalidateCacheStep(context: WorkflowContext) {
