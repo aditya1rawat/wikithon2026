@@ -62,6 +62,13 @@ describe("memory store fallback", () => {
     expect(second.id).toBe(first.id);
     expect(second.hydraEntityId).toBe("hydra-gpt-5");
 
+    await store.upsertEntityWithAliases({
+      entity: { ...first, hydraEntityId: "hydra-gpt-5" },
+      aliases: ["gpt 5 alpha"],
+    });
+    const aliasLookup = await store.findEntityByAlias("gpt 5 alpha");
+    expect(aliasLookup?.id).toBe(first.id);
+
     const page = await store.getEntityPage("gpt5");
     expect(page?.entity.id).toBe(first.id);
   });
