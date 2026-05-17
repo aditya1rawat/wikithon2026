@@ -96,6 +96,38 @@ describe("LLM schemas and fallback", () => {
     expect(JSON.stringify(body.messages)).toContain("Open AI");
   });
 
+  test("fallback canonical entity emits family aliases for MODEL", async () => {
+    const entities = await canonicalizeEntities(["GPT-5.5 Instant"]);
+    expect(entities[0].canonicalName).toBe("GPT-5.5 Instant");
+    expect(entities[0].entityType).toBe("MODEL");
+    expect(entities[0].aliases).toContain("gpt-5");
+    expect(entities[0].aliases).toContain("gpt-5.5-instant");
+  });
+
+  test("canonicalizeEntities returns aliases from live NIM batch", async () => {
+    process.env = { ...originalEnv, NIM_API_KEY: "test-key", NIM_BASE_URL: "https://nim.test" };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                entities: [
+                  { raw: "gpt-5.5", canonicalName: "GPT-5.5 Instant", entityType: "MODEL", aliases: ["GPT-5", "GPT 5.5 Instant"] },
+                ],
+              }),
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const entities = await canonicalizeEntities(["gpt-5.5"]);
+    expect(entities[0].aliases).toEqual(expect.arrayContaining(["GPT-5", "GPT 5.5 Instant"]));
+  });
+
   test("retries transient NIM network failures", async () => {
     process.env = { ...originalEnv, NIM_API_KEY: "test-key", NIM_BASE_URL: "https://nim.test" };
     const fetchMock = vi

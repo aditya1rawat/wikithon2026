@@ -12,7 +12,12 @@ export const ExtractedClaimSchema = z.object({
 });
 
 export const ClaimExtractionSchema = z.object({ claims: z.array(ExtractedClaimSchema) });
-export const CanonicalEntitySchema = z.object({ raw: z.string(), canonicalName: z.string(), entityType: z.enum(["PERSON", "ORG", "PRODUCT", "EVENT", "MODEL"]) });
+export const CanonicalEntitySchema = z.object({
+  raw: z.string(),
+  canonicalName: z.string(),
+  entityType: z.enum(["PERSON", "ORG", "PRODUCT", "EVENT", "MODEL"]),
+  aliases: z.array(z.string()).default([]),
+});
 export const CanonicalEntityBatchSchema = z.object({ entities: z.array(CanonicalEntitySchema) });
 export const JudgementSchema = z.object({
   relation: z.enum(["agree", "contradict", "qualify", "unrelated"]),
@@ -95,9 +100,12 @@ export async function canonicalizeEntities(rawEntities: string[]) {
   const prompt = `Canonicalize these entity mentions as one batch.
 
 Return JSON matching exactly:
-{"entities":[{"raw":"original string","canonicalName":"canonical display name","entityType":"PERSON|ORG|PRODUCT|EVENT|MODEL"}]}
+{"entities":[{"raw":"original string","canonicalName":"canonical display name","entityType":"PERSON|ORG|PRODUCT|EVENT|MODEL","aliases":["common variants"]}]}
 
-Preserve one output object for each input mention.
+Rules:
+- Preserve one output object for each input mention.
+- aliases should include both spelling variants and parent-family names. For MODEL entities, include the family prefix (e.g., for "GPT-5.5 Instant" include "GPT-5").
+- Always include the canonical name itself in aliases.
 
 Entities:
 ${JSON.stringify(unique)}`;
@@ -105,7 +113,8 @@ ${JSON.stringify(unique)}`;
 
 The previous response was invalid. JSON only. Return only the object with an entities array.`;
   try {
-    return (await completeJson(prompt, CanonicalEntityBatchSchema, retryPrompt)).entities;
+    const result = await completeJson(prompt, CanonicalEntityBatchSchema, retryPrompt);
+    return result.entities.map((entity) => ({ ...entity, aliases: dedupeAliases([entity.canonicalName, ...entity.aliases]) }));
   } catch {
     return unique.map(fallbackCanonicalEntity);
   }
@@ -192,11 +201,22 @@ function inferEntity(sentence: string) {
 }
 
 function fallbackCanonicalEntity(raw: string) {
-  return CanonicalEntitySchema.parse({
-    raw,
-    canonicalName: raw.replace(/gpt\s?5/i, "GPT-5").replace(/open ai/i, "OpenAI"),
-    entityType: /gpt|claude/i.test(raw) ? "MODEL" : /sam/i.test(raw) ? "PERSON" : "ORG",
-  });
+  const canonicalName = raw.replace(/gpt\s?5/i, "GPT-5").replace(/open ai/i, "OpenAI");
+  const entityType: "MODEL" | "PERSON" | "ORG" = /gpt|claude/i.test(raw) ? "MODEL" : /sam/i.test(raw) ? "PERSON" : "ORG";
+  const slugAlias = canonicalName.toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/(^-|-$)/g, "");
+  const aliases = dedupeAliases([raw, canonicalName, slugAlias, ...modelFamilyAliases(canonicalName, entityType)]);
+  return CanonicalEntitySchema.parse({ raw, canonicalName, entityType, aliases });
+}
+
+function modelFamilyAliases(canonicalName: string, entityType: string) {
+  if (entityType !== "MODEL") return [];
+  const family = canonicalName.match(/^(gpt-\d+)/i)?.[1];
+  if (!family) return [];
+  return [family.toLowerCase(), family.replace("-", " ").toLowerCase()];
+}
+
+function dedupeAliases(aliases: string[]) {
+  return [...new Set(aliases.map((alias) => alias.trim()).filter(Boolean))];
 }
 
 function fallbackJudgement(a: string, b: string) {

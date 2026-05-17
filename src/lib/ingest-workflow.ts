@@ -126,10 +126,16 @@ export async function extractClaimsStep(context: WorkflowContext) {
     const rawEntity = claim.entity.trim();
     if (!rawEntity) continue;
     const canonical = canonicalByRaw.get(rawEntity) ?? canonicalEntities.find((entity) => entity.canonicalName === rawEntity);
+    const aliases = [
+      rawEntity,
+      canonical?.canonicalName ?? rawEntity,
+      ...(canonical?.aliases ?? []),
+    ];
     const entity = await ensureEntity({
       raw: rawEntity,
       canonicalName: canonical?.canonicalName ?? rawEntity,
       entityType: canonical?.entityType ?? "PRODUCT",
+      aliases,
       topic: context.topic,
     });
     touchedEntityIds.add(entity.id);
@@ -202,7 +208,7 @@ function topicFor(topicId?: string): Topic {
   return { ...demoTopic, id: topicId, hydraSubTenantId: `wikithon-${topicId}` };
 }
 
-async function ensureEntity(input: { raw: string; canonicalName: string; entityType: Entity["entityType"]; topic: Topic }) {
+async function ensureEntity(input: { raw: string; canonicalName: string; entityType: Entity["entityType"]; aliases: string[]; topic: Topic }) {
   const existing = (await store.findEntityByAlias(input.canonicalName, input.topic.id)) ?? (await store.findEntityByAlias(input.raw, input.topic.id));
   const seed: Entity =
     existing ??
@@ -217,7 +223,7 @@ async function ensureEntity(input: { raw: string; canonicalName: string; entityT
 
   return store.upsertEntityWithAliases({
     entity: { ...seed, topicId: input.topic.id },
-    aliases: [input.raw, input.canonicalName],
+    aliases: input.aliases,
   });
 }
 

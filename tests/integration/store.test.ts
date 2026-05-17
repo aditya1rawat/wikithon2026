@@ -73,6 +73,25 @@ describe("memory store fallback", () => {
     expect(page?.entity.id).toBe(first.id);
   });
 
+  test("model-family alias resolves to canonical entity page", async () => {
+    const store = createMemoryStore({ seedDemoData: false });
+    await store.upsertTopic(demoTopic);
+    await store.upsertEntityWithAliases({
+      entity: {
+        id: "gpt-5-5-instant",
+        topicId: demoTopic.id,
+        canonicalName: "GPT-5.5 Instant",
+        entityType: "MODEL",
+        hydraEntityId: null,
+        firstSeen: "2026-05-17T00:00:00.000Z",
+      },
+      aliases: ["GPT-5.5 Instant", "gpt-5", "gpt5"],
+    });
+
+    const resolved = await store.findEntityByAlias("gpt-5");
+    expect(resolved?.id).toBe("gpt-5-5-instant");
+  });
+
   test("upserts ingest data idempotently without a database", async () => {
     const store = createMemoryStore({ seedDemoData: false });
     await store.upsertTopic(demoTopic);
