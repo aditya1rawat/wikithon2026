@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { randomUUID } from "crypto";
 import {
   demoAliases,
   demoClaimRelations,
@@ -31,6 +32,8 @@ type Sql = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<Reco
 export interface ConsensusStore {
   upsertTopic(topic: Topic): Promise<Topic>;
   getDashboard(topicId?: string): Promise<DashboardData>;
+  getSource(id: string): Promise<Source | null>;
+  getSourcesByIds(ids: string[]): Promise<Source[]>;
   listSources(topicId?: string): Promise<Source[]>;
   findEntityByAlias(value: string, topicId?: string): Promise<Entity | null>;
   getEntityPage(slug: string, topicId?: string): Promise<EntityPage | null>;
@@ -104,6 +107,14 @@ export function createMemoryStore(options: { seedDemoData?: boolean; now?: () =>
     async getDashboard(topicId = demoTopic.id) {
       return buildDashboard(snapshot(topicId));
     },
+    async getSource(id) {
+      const source = sources.find((item) => item.id === id);
+      return source ? cloneSource(source) : null;
+    },
+    async getSourcesByIds(ids) {
+      const byId = new Map(sources.map((source) => [source.id, source]));
+      return ids.map((id) => byId.get(id)).filter((source): source is Source => Boolean(source)).map(cloneSource);
+    },
     async listSources(topicId = demoTopic.id) {
       return snapshot(topicId).sources.sort(sortByPublishedAtDesc);
     },
@@ -120,11 +131,11 @@ export function createMemoryStore(options: { seedDemoData?: boolean; now?: () =>
       return savedQueries.find((query) => query.slug === slugOrId || query.id === slugOrId) ?? null;
     },
     async saveQuery(question, answerMd, citedSourceIds = [], topicId = demoTopic.id) {
-      const slug = slugify(question).slice(0, 64) || `query-${now().getTime()}`;
+      const identity = savedQueryIdentity(question);
       const saved: SavedQuery = {
-        id: slug,
+        id: identity.id,
         topicId,
-        slug,
+        slug: identity.slug,
         question,
         answerMd,
         citedSourceIds,
@@ -154,7 +165,15 @@ export function createMemoryStore(options: { seedDemoData?: boolean; now?: () =>
         (entity) => entity.id === input.entity.id || (entity.topicId === input.entity.topicId && normalizeAlias(entity.canonicalName) === normalizedCanonical)
       );
       const next = cloneEntity(input.entity);
-      if (existingIndex >= 0) entities[existingIndex] = { ...entities[existingIndex], ...next, id: entities[existingIndex].id };
+      if (existingIndex >= 0) {
+        const existing = entities[existingIndex];
+        entities[existingIndex] = {
+          ...existing,
+          canonicalName: next.canonicalName,
+          entityType: next.entityType,
+          hydraEntityId: next.hydraEntityId ?? existing.hydraEntityId,
+        };
+      }
       else entities.push(next);
       const entity = entities[existingIndex >= 0 ? existingIndex : entities.length - 1];
       for (const alias of input.aliases ?? []) {
@@ -215,9 +234,18 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
       sql`
         SELECT DISTINCT cr.claim_a, cr.claim_b, cr.relation, cr.rationale, cr.llm_confidence, cr.judged_at
         FROM claim_relations cr
-        JOIN claims c ON c.id = cr.claim_a
-        JOIN entities e ON e.id = c.entity_id
-        WHERE e.topic_id = ${topicId}
+        WHERE cr.claim_a IN (
+          SELECT c.id
+          FROM claims c
+          JOIN entities e ON e.id = c.entity_id
+          WHERE e.topic_id = ${topicId}
+        )
+        OR cr.claim_b IN (
+          SELECT c.id
+          FROM claims c
+          JOIN entities e ON e.id = c.entity_id
+          WHERE e.topic_id = ${topicId}
+        )
       `,
       sql`
         SELECT l.entity_id, l.lede, l.source_count_at_gen, l.generated_at
@@ -253,6 +281,19 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
     async getDashboard(topicId = demoTopic.id) {
       return buildDashboard(await loadSnapshot(topicId));
     },
+    async getSource(id) {
+      const rows = await sql`
+        SELECT id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_run_id
+        FROM sources
+        WHERE id = ${id}
+        LIMIT 1
+      `;
+      return rows[0] ? rowToSource(rows[0]) : null;
+    },
+    async getSourcesByIds(ids) {
+      const sources = await Promise.all(ids.map((id) => store.getSource(id)));
+      return sources.filter((source): source is Source => Boolean(source));
+    },
     async listSources(topicId = demoTopic.id) {
       return (await loadSnapshot(topicId)).sources.sort(sortByPublishedAtDesc);
     },
@@ -276,12 +317,13 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
     },
     async saveQuery(question, answerMd, citedSourceIds = [], topicId = demoTopic.id) {
       await ensureDemoTopic(topicId);
-      const slug = slugify(question).slice(0, 64) || `query-${Date.now()}`;
+      const identity = savedQueryIdentity(question);
       const rows = await sql`
         INSERT INTO saved_queries (id, topic_id, slug, question, answer_md, cited_source_ids, saved_at)
-        VALUES (${slug}, ${topicId}, ${slug}, ${question}, ${answerMd}, ${citedSourceIds}, ${new Date().toISOString()})
+        VALUES (${identity.id}, ${topicId}, ${identity.slug}, ${question}, ${answerMd}, ${citedSourceIds}, ${new Date().toISOString()})
         ON CONFLICT (id) DO UPDATE SET
           question = EXCLUDED.question,
+          slug = EXCLUDED.slug,
           answer_md = EXCLUDED.answer_md,
           cited_source_ids = EXCLUDED.cited_source_ids,
           saved_at = EXCLUDED.saved_at
@@ -339,10 +381,9 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
           ${input.entity.firstSeen}
         )
         ON CONFLICT (id) DO UPDATE SET
-          topic_id = EXCLUDED.topic_id,
           canonical_name = EXCLUDED.canonical_name,
           entity_type = EXCLUDED.entity_type,
-          hydra_entity_id = EXCLUDED.hydra_entity_id
+          hydra_entity_id = COALESCE(EXCLUDED.hydra_entity_id, entities.hydra_entity_id)
         RETURNING id, topic_id, canonical_name, entity_type, hydra_entity_id, first_seen
       `;
       const entity = rowToEntity(rows[0]);
@@ -574,6 +615,13 @@ function sortByPublishedAtDesc(a: Source, b: Source) {
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function savedQueryIdentity(question: string) {
+  const id = randomUUID();
+  const suffix = id.slice(0, 8);
+  const base = slugify(question).slice(0, 55) || "query";
+  return { id, slug: `${base}-${suffix}` };
 }
 
 function rowToTopic(row: Record<string, unknown>): Topic {

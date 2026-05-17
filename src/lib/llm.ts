@@ -26,6 +26,7 @@ interface CompleteOptions {
   system?: string;
   timeoutMs?: number;
   jsonOnly?: boolean;
+  attempts?: number;
 }
 
 export async function complete(prompt: string, options: CompleteOptions = {}) {
@@ -54,7 +55,7 @@ export async function complete(prompt: string, options: CompleteOptions = {}) {
     }
     const json = await response.json();
     return String(json.choices?.[0]?.message?.content ?? "");
-  }, 3);
+  }, options.attempts ?? 3);
 }
 
 export async function extractClaims(text: string) {
@@ -144,9 +145,9 @@ Return JSON matching exactly:
 
 Question: ${question}`;
     const result = await completeJson(prompt, QueryAnswerSchema, `${prompt}\n\nThe previous response was invalid. JSON only.`);
-    return result.answerMd;
+    return result;
   }
-  return synthesizeDemoAnswer(question);
+  return QueryAnswerSchema.parse({ answerMd: await synthesizeDemoAnswer(question), citedSourceIds: [] });
 }
 
 function fallbackCompletion(prompt: string) {
@@ -163,11 +164,11 @@ function fallbackCanonicalEntity(raw: string) {
 }
 
 async function completeJson<T>(prompt: string, schema: z.ZodType<T>, retryPrompt: string): Promise<T> {
-  const first = await complete(prompt, { system: jsonSystemPrompt(), jsonOnly: true });
+  const first = await complete(prompt, { system: jsonSystemPrompt(), jsonOnly: true, attempts: 1 });
   try {
     return schema.parse(parseModelJson(first));
   } catch {
-    const second = await complete(retryPrompt, { system: strictJsonSystemPrompt(), jsonOnly: true });
+    const second = await complete(retryPrompt, { system: strictJsonSystemPrompt(), jsonOnly: true, attempts: 1 });
     return schema.parse(parseModelJson(second));
   }
 }
@@ -202,7 +203,7 @@ async function fetchWithTimeout(target: URL | string, { init, timeoutMs }: { ini
     return await fetch(target.toString(), { ...init, signal: controller.signal });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw new ProviderError("NIM request timed out", true);
-    throw error;
+    throw new ProviderError(error instanceof Error ? error.message : "NIM request failed", true);
   } finally {
     clearTimeout(timer);
   }

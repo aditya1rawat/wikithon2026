@@ -1,3 +1,4 @@
+-- Initial schema for fresh ConsensusWiki databases; no backfill required.
 CREATE TABLE topics (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,

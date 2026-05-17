@@ -17,6 +17,14 @@ export async function listSources() {
   return store.listSources();
 }
 
+export async function getSource(id: string) {
+  return store.getSource(id);
+}
+
+export async function getSourcesByIds(ids: string[]) {
+  return store.getSourcesByIds(ids);
+}
+
 export async function getEntityPage(slug: string) {
   return store.getEntityPage(slug);
 }
@@ -75,7 +83,7 @@ export async function saveQuery(question: string, answerMd: string, citedSourceI
 
 export async function registerDemoIngest(url: string, title?: string) {
   const id = stableSourceId(demoTopic.id, url);
-  const existing = (await listSources()).find((source) => source.id === id);
+  const existing = await getSource(id);
   if (existing) return existing;
 
   const parsed = new URL(url);

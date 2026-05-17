@@ -8,6 +8,6 @@ export async function askQuestion(formData: FormData) {
   const question = String(formData.get("question") ?? "").trim();
   if (!question) redirect("/query");
   const answer = await synthesizeQueryAnswer(question);
-  const saved = await saveQuery(question, answer);
+  const saved = await saveQuery(question, answer.answerMd, answer.citedSourceIds);
   redirect(`/wiki/q/${saved.slug}`);
 }

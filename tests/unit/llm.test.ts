@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { ClaimExtractionSchema, JudgementSchema, canonicalizeEntities, extractClaims, judgeContradictions } from "@/lib/llm";
+import { ClaimExtractionSchema, JudgementSchema, canonicalizeEntities, complete, extractClaims, judgeContradictions, synthesizeQueryAnswer } from "@/lib/llm";
 
 const originalEnv = process.env;
 
@@ -26,6 +26,12 @@ describe("LLM schemas and fallback", () => {
   test("fallback judgement uses schema", async () => {
     const judgement = await judgeContradictions("released in May", "not released until late 2026");
     expect(JudgementSchema.parse(judgement).relation).toBe("contradict");
+  });
+
+  test("fallback query synthesis returns citations shape", async () => {
+    const answer = await synthesizeQueryAnswer("What released?");
+    expect(answer.answerMd).toContain("GPT-5");
+    expect(answer.citedSourceIds).toEqual([]);
   });
 
   test("retries extraction with a stricter JSON-only prompt after invalid JSON", async () => {
@@ -88,5 +94,20 @@ describe("LLM schemas and fallback", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(JSON.stringify(body.messages)).toContain("gpt5");
     expect(JSON.stringify(body.messages)).toContain("Open AI");
+  });
+
+  test("retries transient NIM network failures", async () => {
+    process.env = { ...originalEnv, NIM_API_KEY: "test-key", NIM_BASE_URL: "https://nim.test" };
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("socket closed"))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "Recovered" } }] }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(complete("hello")).resolves.toBe("Recovered");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

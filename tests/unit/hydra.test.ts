@@ -77,4 +77,17 @@ describe("Hydra fallback", () => {
     await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 200 })).resolves.toMatchObject({ status: "success" });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  test("returns unknown provider statuses as terminal for workflow mapping", async () => {
+    process.env = {
+      ...originalEnv,
+      HYDRA_API_KEY: "test-key",
+      HYDRA_BASE_URL: "https://hydra.test",
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s1", status: "completed" }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(pollHydraStatus("s1", { intervalMs: 1, ceilingMs: 200 })).resolves.toMatchObject({ status: "completed" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

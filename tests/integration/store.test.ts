@@ -34,6 +34,15 @@ describe("memory store fallback", () => {
       aliases: ["newmodel", "New Model"],
     });
     await store.upsertEntityWithAliases({ entity, aliases: ["new model"] });
+    await store.upsertEntityWithAliases({
+      entity: {
+        ...entity,
+        canonicalName: "New Model",
+        hydraEntityId: null,
+        firstSeen: "2026-05-16T13:00:00.000Z",
+      },
+      aliases: ["new model"],
+    });
 
     const claimId = stableClaimId(sourceId, "New Model shipped.");
     const [claim] = await store.insertClaims([
@@ -57,11 +66,16 @@ describe("memory store fallback", () => {
     });
 
     const saved = await store.saveQuery("What shipped?", "New Model shipped.", [sourceId]);
+    const secondSaved = await store.saveQuery("What shipped?", "New Model shipped again.", [sourceId]);
     const page = await store.getEntityPage("newmodel");
     const dashboard = await store.getDashboard();
 
     expect((await store.listSources()).map((item) => item.id)).toEqual([sourceId]);
+    expect(await store.getSource(sourceId)).toMatchObject({ id: sourceId, hydraStatus: "success" });
+    expect(await store.getSourcesByIds([sourceId, "missing"])).toHaveLength(1);
     expect(page?.entity.id).toBe(entity.id);
+    expect(page?.entity.firstSeen).toBe("2026-05-16T12:02:00.000Z");
+    expect(page?.entity.hydraEntityId).toBe("hydra-new-model");
     expect(page?.aliases.map((item) => item.alias).sort()).toEqual(["new model", "newmodel"]);
     expect(page?.claims).toHaveLength(1);
     expect(page?.claims[0].confidence).toBe(0.95);
@@ -69,5 +83,7 @@ describe("memory store fallback", () => {
     expect(dashboard.stats.sources).toBe(1);
     expect(dashboard.stats.claims).toBe(1);
     expect((await store.getSavedQuery(saved.slug))?.id).toBe(saved.id);
+    expect(secondSaved.id).not.toBe(saved.id);
+    expect(secondSaved.slug).not.toBe(saved.slug);
   });
 });

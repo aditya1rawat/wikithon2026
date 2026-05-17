@@ -162,9 +162,11 @@ function ClaimCard({ claim }: { claim: CitedClaim }) {
           </div>
         </div>
         <p className="leading-7">{claim.claimText}</p>
-        <blockquote className="rounded-md border-l-4 bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">
-          Excerpt {claim.chunkUuid ?? "pending chunk"}: source text supporting this claim is attached to the HydraDB chunk citation.
-        </blockquote>
+        {claim.chunkUuid ? (
+          <div className="rounded-md border-l-4 bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">Citation chunk: {claim.chunkUuid}</div>
+        ) : (
+          <div className="rounded-md border-l-4 bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">Citation chunk pending; source excerpt not yet available.</div>
+        )}
         {claim.source.url ? (
           <Link href={claim.source.url} className="block text-sm font-medium text-primary hover:underline">
             {sourceLabel}

@@ -1,18 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookOpen, Link2 } from "lucide-react";
-import { getSavedQuery, listSources } from "@/lib/app-service";
+import { getSavedQuery, getSourcesByIds } from "@/lib/app-service";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function SavedQueryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const [query, sources] = await Promise.all([getSavedQuery(slug), listSources()]);
+  const query = await getSavedQuery(slug);
   if (!query) notFound();
 
-  const citedSources = query.citedSourceIds
-    .map((sourceId) => sources.find((source) => source.id === sourceId))
-    .filter((source): source is NonNullable<typeof source> => Boolean(source));
+  const citedSources = await getSourcesByIds(query.citedSourceIds);
   const path = `/wiki/q/${query.slug}`;
 
   return (

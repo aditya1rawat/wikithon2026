@@ -1,5 +1,5 @@
 import { revalidatePath, revalidateTag } from "next/cache";
-import { findEntityByAlias, registerDemoIngest } from "./app-service";
+import { registerDemoIngest } from "./app-service";
 import { demoTopic, stableClaimId } from "./demo-data";
 import { pollHydraStatus as pollHydraProviderStatus, uploadKnowledge } from "./hydra";
 import { canonicalizeEntities, extractClaims, judgeContradictions } from "./llm";
@@ -32,8 +32,18 @@ interface ExtractedWorkflowClaim {
 
 export async function runIngestWorkflow(input: WorkflowInput) {
   const context = await fetchAndNormalize(input);
-  await hydraUpload(context);
-  await pollHydraStatus(context);
+  try {
+    await hydraUpload(context);
+  } catch (error) {
+    await safeUpdateSourceStatus(context.source.id, "failed_upload");
+    throw error;
+  }
+  try {
+    await pollHydraStatus(context);
+  } catch (error) {
+    await safeUpdateSourceStatus(context.source.id, "hydra_errored");
+    throw error;
+  }
   await extractClaimsStep(context);
   await judgeContradictionsStep(context);
   await invalidateCacheStep(context);
@@ -97,7 +107,7 @@ export async function hydraUpload(context: WorkflowContext) {
 export async function pollHydraStatus(context: WorkflowContext) {
   const hydraStatus = await pollHydraProviderStatus(context.source.id);
   context.hydraStatus = hydraStatus;
-  await safeUpdateSourceStatus(context.source.id, hydraStatus.status === "errored" ? "hydra_errored" : (hydraStatus.status as HydraStatus));
+  await safeUpdateSourceStatus(context.source.id, mapProviderStatusToHydraStatus(hydraStatus.status));
   return hydraStatus;
 }
 
@@ -110,10 +120,12 @@ export async function extractClaimsStep(context: WorkflowContext) {
   const workflowClaims: ExtractedWorkflowClaim[] = [];
 
   for (const claim of claims) {
-    const canonical = canonicalByRaw.get(claim.entity) ?? canonicalEntities.find((entity) => entity.canonicalName === claim.entity);
+    const rawEntity = claim.entity.trim();
+    if (!rawEntity) continue;
+    const canonical = canonicalByRaw.get(rawEntity) ?? canonicalEntities.find((entity) => entity.canonicalName === rawEntity);
     const entity = await ensureEntity({
-      raw: claim.entity,
-      canonicalName: canonical?.canonicalName ?? claim.entity,
+      raw: rawEntity,
+      canonicalName: canonical?.canonicalName ?? rawEntity,
       entityType: canonical?.entityType ?? "PRODUCT",
       topic: context.topic,
     });
@@ -188,8 +200,7 @@ function topicFor(topicId?: string): Topic {
 }
 
 async function ensureEntity(input: { raw: string; canonicalName: string; entityType: Entity["entityType"]; topic: Topic }) {
-  const existing =
-    (await store.findEntityByAlias(input.canonicalName, input.topic.id)) ?? (await findEntityByAlias(input.canonicalName)) ?? (await findEntityByAlias(input.raw));
+  const existing = (await store.findEntityByAlias(input.canonicalName, input.topic.id)) ?? (await store.findEntityByAlias(input.raw, input.topic.id));
   const entity: Entity =
     existing ??
     ({
@@ -234,6 +245,25 @@ function safeRevalidatePath(path: string) {
     revalidatePath(path);
   } catch {
     // Cache invalidation is best effort in tests and local fallback mode.
+  }
+}
+
+function mapProviderStatusToHydraStatus(status: string): HydraStatus {
+  switch (status) {
+    case "queued":
+      return "queued";
+    case "in_progress":
+      return "in_progress";
+    case "success":
+    case "complete":
+    case "completed":
+      return "success";
+    case "errored":
+    case "error":
+    case "failed":
+      return "hydra_errored";
+    default:
+      return "hydra_errored";
   }
 }
 

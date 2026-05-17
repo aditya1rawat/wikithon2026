@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { getSource } from "@/lib/app-service";
 import { runIngestWorkflow } from "@/lib/ingest-workflow";
 
 vi.mock("next/cache", () => ({
@@ -52,5 +53,37 @@ describe("ingest workflow", () => {
     expect(cache.revalidateTag).toHaveBeenCalledWith("entity:gpt-5");
     expect(cache.revalidateTag).toHaveBeenCalledWith("topic:ai-industry");
     expect(cache.revalidateTag).toHaveBeenCalledWith("graph:ai-industry");
+  });
+
+  test("maps completed Hydra provider status to local success", async () => {
+    process.env = {
+      ...originalEnv,
+      HYDRA_API_KEY: "test-key",
+      HYDRA_TENANT_ID: "tenant-1",
+      HYDRA_BASE_URL: "https://hydra.test",
+      NIM_API_KEY: "",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () => `
+            <html>
+              <head><title>GPT-5 live coverage</title></head>
+              <body><article><p>OpenAI released GPT-5 as a generally available model in May 2026.</p></article></body>
+            </html>
+          `,
+        })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s2", status: "queued" }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ sourceId: "s2", status: "completed" }) })
+    );
+
+    const result = await runIngestWorkflow("https://example.com/gpt-5-completed");
+    const source = await getSource(result.source.id);
+
+    expect(result.hydraStatus).toMatchObject({ status: "completed" });
+    expect(source?.hydraStatus).toBe("success");
   });
 });

@@ -7,7 +7,7 @@ test("dashboard and entity page render demo data", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "GPT-5" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Contested claims/i })).toBeVisible();
   await expect(page.getByText("GPT-5 will not be released until late 2026.").first()).toBeVisible();
-  await expect(page.getByText(/Excerpt chunk-/i).first()).toBeVisible();
+  await expect(page.getByText(/Citation chunk:/i).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: /Related evidence/i })).toBeVisible();
 });
 

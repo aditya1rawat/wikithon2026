@@ -11,9 +11,14 @@ export interface NormalizedSource {
 const DEFAULT_TEXT_LIMIT = 48_000;
 
 export async function normalizeUrl(url: string): Promise<NormalizedSource> {
-  const response = await fetch(url);
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch {
+    return normalizeViaJina(url);
+  }
   if (!response.ok) {
-    if (response.status >= 500) return normalizeViaJina(url);
+    if (response.status === 403 || response.status === 429 || response.status >= 500) return normalizeViaJina(url);
     throw new Error(`Fetch failed: ${response.status}`);
   }
   const html = await response.text();

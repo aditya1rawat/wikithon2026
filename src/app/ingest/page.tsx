@@ -97,14 +97,56 @@ function WorkflowTimeline({ source }: { source: Source }) {
 }
 
 function buildSteps(status: HydraStatus) {
-  const failed = isFailed(status);
   const active = status === "queued" || status === "in_progress";
+  const fetchFailed = status === "failed_fetch";
+  const uploadFailed = status === "failed_upload";
+  const hydraFailed = status === "hydra_errored";
+  const complete = status === "success";
+  const uploadState = uploadStepState({ uploadFailed, active });
+  const pollState = pollStepState({ hydraFailed, complete });
+
   return [
-    { label: "Fetch and normalize", detail: failed && status === "failed_fetch" ? "Fetch failed" : "Article/PDF text ready", icon: failed && status === "failed_fetch" ? AlertTriangle : CheckCircle2, tone: failed && status === "failed_fetch" ? "h-4 w-4 text-destructive" : "h-4 w-4 text-emerald-600" },
-    { label: "Hydra upload", detail: status === "failed_upload" ? "Upload needs retry" : active ? "Waiting on upload" : "Knowledge accepted", icon: status === "failed_upload" ? AlertTriangle : active ? Clock3 : CheckCircle2, tone: status === "failed_upload" ? "h-4 w-4 text-destructive" : active ? "h-4 w-4 text-amber-600" : "h-4 w-4 text-emerald-600" },
-    { label: "Hydra poll", detail: status === "hydra_errored" ? "Hydra returned errored" : status === "success" ? "Processing complete" : "Status pending", icon: status === "hydra_errored" ? AlertTriangle : status === "success" ? CheckCircle2 : Clock3, tone: status === "hydra_errored" ? "h-4 w-4 text-destructive" : status === "success" ? "h-4 w-4 text-emerald-600" : "h-4 w-4 text-amber-600" },
-    { label: "Claims and graph", detail: status === "success" ? "Entity pages invalidated" : "Runs after Hydra success", icon: status === "success" ? CheckCircle2 : Clock3, tone: status === "success" ? "h-4 w-4 text-emerald-600" : "h-4 w-4 text-amber-600" },
+    step("Fetch and normalize", fetchFailed ? "Fetch failed" : "Article/PDF text ready", fetchFailed ? "error" : "done"),
+    step("Hydra upload", uploadStepDetail(uploadState), uploadState),
+    step("Hydra poll", pollStepDetail(pollState), pollState),
+    step("Claims and graph", complete ? "Entity pages invalidated" : "Runs after Hydra success", complete ? "done" : "pending"),
   ];
+}
+
+type StepState = "done" | "pending" | "error";
+
+function uploadStepState({ uploadFailed, active }: { uploadFailed: boolean; active: boolean }): StepState {
+  if (uploadFailed) return "error";
+  if (active) return "pending";
+  return "done";
+}
+
+function uploadStepDetail(state: StepState) {
+  if (state === "error") return "Upload needs retry";
+  if (state === "pending") return "Waiting on upload";
+  return "Knowledge accepted";
+}
+
+function pollStepState({ hydraFailed, complete }: { hydraFailed: boolean; complete: boolean }): StepState {
+  if (hydraFailed) return "error";
+  if (complete) return "done";
+  return "pending";
+}
+
+function pollStepDetail(state: StepState) {
+  if (state === "error") return "Hydra returned errored";
+  if (state === "done") return "Processing complete";
+  return "Status pending";
+}
+
+function step(label: string, detail: string, state: StepState) {
+  const icon = { done: CheckCircle2, pending: Clock3, error: AlertTriangle }[state];
+  const tone = {
+    done: "h-4 w-4 text-emerald-600",
+    pending: "h-4 w-4 text-amber-600",
+    error: "h-4 w-4 text-destructive",
+  }[state];
+  return { label, detail, icon, tone };
 }
 
 function StatusBadge({ status }: { status: HydraStatus }) {

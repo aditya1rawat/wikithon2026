@@ -18,6 +18,8 @@ const WRITE_TIMEOUT_MS = 15_000;
 const READ_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 2_000;
 const POLL_CEILING_MS = 90_000;
+const NON_TERMINAL_STATUSES = new Set(["queued", "in_progress"]);
+const TERMINAL_STATUSES = new Set(["success", "complete", "completed", "errored", "error", "failed"]);
 
 const baseUrl = () => (process.env.HYDRA_BASE_URL ?? "https://api.hydradb.ai").replace(/\/$/, "");
 
@@ -58,7 +60,7 @@ export async function pollHydraStatus(sourceId: string, options: HydraPollOption
   while (Date.now() - startedAt <= ceilingMs) {
     try {
       const status = await readHydraStatus(sourceId);
-      if (status.status === "success" || status.status === "errored") return status;
+      if (TERMINAL_STATUSES.has(status.status) || !NON_TERMINAL_STATUSES.has(status.status)) return status;
       transientFailures = 0;
     } catch (error) {
       transientFailures += 1;
@@ -131,7 +133,7 @@ async function fetchWithTimeout(target: string, { init, timeoutMs }: { init: Req
     return await fetch(target, { ...init, signal: controller.signal });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw new HydraError(`Hydra request timed out after ${timeoutMs}ms`, true);
-    throw error;
+    throw new HydraError(error instanceof Error ? error.message : "Hydra request failed", true);
   } finally {
     clearTimeout(timer);
   }
