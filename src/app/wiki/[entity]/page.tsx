@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarDays, GitBranch, Quote, ShieldAlert, Sparkles } from "lucide-react";
+import { CalendarDays, ChevronRight, GitBranch, Quote, ShieldAlert, Sparkles } from "lucide-react";
 import { getEntityPage } from "@/lib/app-service";
 import { excerptFor, getChunksForEntity, type ChunksBySource } from "@/lib/recall";
 import { Badge } from "@/components/ui/badge";
@@ -146,6 +146,7 @@ function ClaimSection({
   count,
   icon: Icon,
   urgent = false,
+  defaultOpen = true,
   children,
 }: {
   title: string;
@@ -153,19 +154,26 @@ function ClaimSection({
   count: number;
   icon: React.ComponentType<{ className?: string }>;
   urgent?: boolean;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Icon className="h-5 w-5" /> {title}</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{subtitle}</p>
+    <details
+      open={defaultOpen}
+      className="group space-y-3 rounded-lg border bg-card/30 px-4 py-3 [&[open]>summary]:mb-3"
+    >
+      <summary className="flex cursor-pointer list-none flex-wrap items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+        <div className="flex items-start gap-2">
+          <ChevronRight className="mt-1.5 h-4 w-4 text-muted-foreground transition-transform duration-150 group-open:rotate-90" />
+          <div>
+            <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Icon className="h-5 w-5" /> {title}</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{subtitle}</p>
+          </div>
         </div>
         <Badge variant={urgent && count > 0 ? "destructive" : "secondary"}>{count} claims</Badge>
-      </div>
-      {children}
-    </section>
+      </summary>
+      <div className="space-y-3">{children}</div>
+    </details>
   );
 }
 

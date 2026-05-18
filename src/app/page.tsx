@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, FileText, GitBranch, ShieldAlert } from "lucide-react";
+import { ArrowRight, ExternalLink, FileText, GitBranch, ShieldAlert } from "lucide-react";
 import { getDashboard } from "@/lib/app-service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,15 +92,37 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader><CardTitle>Recent sources</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            {dashboard.sources.map((source) => (
-              <div key={source.id} className="rounded-md border bg-card p-3">
-                <div className="font-medium leading-6 line-clamp-2" title={source.title}>{source.title}</div>
-                <div className="mt-1 flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                  <span>{source.publisher}</span>
-                  <StatusPill source={source} compact />
+            {dashboard.sources.map((source) => {
+              const inner = (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-medium leading-6 line-clamp-2 group-hover:text-primary group-hover:underline" title={source.title}>{source.title}</div>
+                    {source.url ? (
+                      <ExternalLink className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden />
+                    ) : null}
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                    <span>{source.publisher}</span>
+                    <StatusPill source={source} compact />
+                  </div>
+                </>
+              );
+              return source.url ? (
+                <a
+                  key={source.id}
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="group block rounded-md border bg-card p-3 transition-colors hover:border-primary/60 hover:bg-card/80"
+                >
+                  {inner}
+                </a>
+              ) : (
+                <div key={source.id} className="rounded-md border bg-card p-3">
+                  {inner}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       </section>
