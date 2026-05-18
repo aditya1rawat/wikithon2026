@@ -37,6 +37,10 @@ export async function getSavedQuery(slug: string) {
   return store.getSavedQuery(slug);
 }
 
+export async function listSavedQueries(limit = 8) {
+  return store.listSavedQueries(limit);
+}
+
 export async function upsertSource(source: Source) {
   const saved = await store.upsertSource(source);
   revalidateTopicViews();

@@ -41,6 +41,7 @@ export interface ConsensusStore {
   getEntityPage(slug: string, topicId?: string): Promise<EntityPage | null>;
   getGraphData(topicId?: string): Promise<GraphData>;
   getSavedQuery(slugOrId: string): Promise<SavedQuery | null>;
+  listSavedQueries(limit?: number): Promise<SavedQuery[]>;
   saveQuery(question: string, answerMd: string, citedSourceIds?: string[], topicId?: string): Promise<SavedQuery>;
   upsertSource(source: Source): Promise<Source>;
   updateSourceStatus(id: string, status: HydraStatus): Promise<Source | null>;
@@ -132,6 +133,9 @@ export function createMemoryStore(options: { seedDemoData?: boolean; now?: () =>
     },
     async getSavedQuery(slugOrId) {
       return savedQueries.find((query) => query.slug === slugOrId || query.id === slugOrId) ?? null;
+    },
+    async listSavedQueries(limit = 8) {
+      return savedQueries.slice(0, limit).map(cloneSavedQuery);
     },
     async saveQuery(question, answerMd, citedSourceIds = [], topicId = demoTopic.id) {
       const identity = savedQueryIdentity(question);
@@ -323,6 +327,15 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
         LIMIT 1
       `;
       return rows[0] ? rowToSavedQuery(rows[0]) : null;
+    },
+    async listSavedQueries(limit = 8) {
+      const rows = await sql`
+        SELECT id, topic_id, slug, question, answer_md, cited_source_ids, saved_at
+        FROM saved_queries
+        ORDER BY saved_at DESC
+        LIMIT ${limit}
+      `;
+      return rows.map(rowToSavedQuery);
     },
     async saveQuery(question, answerMd, citedSourceIds = [], topicId = demoTopic.id) {
       await ensureDemoTopic(topicId);
