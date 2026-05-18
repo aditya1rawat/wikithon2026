@@ -46,21 +46,24 @@ describe("Hydra fallback", () => {
     expect(result).toMatchObject({ status: "queued" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe("https://hydra.test/ingestion/upload_knowledge");
-    const body = fetchMock.mock.calls[1][1].body as FormData;
-    expect(body.get("tenant_id")).toBe("tenant-1");
-    expect(JSON.parse(String(body.get("app_knowledge")))).toEqual([
-      {
-        tenant_id: "tenant-1",
-        sub_tenant_id: "topic-subtenant",
-        id: "s1",
-        source: "publisher",
-        title: "Title",
-        url: "https://example.com/a",
-        timestamp: "2026-05-16T00:00:00.000Z",
-        content: { text: "Article body" },
-        additional_metadata: { topic_id: "ai-industry", ingest_run_id: "run-1" },
-      },
-    ]);
+    const init = fetchMock.mock.calls[1][1];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(init.body as string)).toEqual({
+      app_knowledge: [
+        {
+          id: "s1",
+          tenant_id: "tenant-1",
+          sub_tenant_id: "topic-subtenant",
+          source: "publisher",
+          title: "Title",
+          url: "https://example.com/a",
+          timestamp: "2026-05-16T00:00:00.000Z",
+          content: { text: "Article body" },
+          additional_metadata: { topic_id: "ai-industry", ingest_run_id: "run-1" },
+        },
+      ],
+    });
   });
 
   test("polls status until terminal success within the ceiling", async () => {

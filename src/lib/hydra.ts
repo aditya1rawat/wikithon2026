@@ -26,25 +26,27 @@ const baseUrl = () => (process.env.HYDRA_BASE_URL ?? "https://api.hydradb.com").
 
 export async function uploadKnowledge(input: HydraKnowledgeInput) {
   if (!process.env.HYDRA_API_KEY) return { sourceId: input.id, status: "queued" as const, demo: true };
-  const body = new FormData();
-  body.append("tenant_id", process.env.HYDRA_TENANT_ID ?? "");
-  body.append("app_knowledge", JSON.stringify([{
-    tenant_id: process.env.HYDRA_TENANT_ID,
-    sub_tenant_id: input.subTenantId,
-    id: input.id,
-    source: input.source,
-    title: input.title,
-    url: input.url ?? null,
-    timestamp: input.timestamp ?? null,
-    content: { text: input.text },
-    additional_metadata: input.metadata ?? {},
-  }]));
+  const body = JSON.stringify({
+    app_knowledge: [
+      {
+        id: input.id,
+        tenant_id: process.env.HYDRA_TENANT_ID,
+        sub_tenant_id: input.subTenantId,
+        source: input.source,
+        title: input.title,
+        url: input.url ?? null,
+        timestamp: input.timestamp ?? null,
+        content: { text: input.text },
+        additional_metadata: input.metadata ?? {},
+      },
+    ],
+  });
   return retry(async () => {
     const response = await fetchWithTimeout(`${baseUrl()}/ingestion/upload_knowledge`, {
       timeoutMs: WRITE_TIMEOUT_MS,
       init: {
         method: "POST",
-        headers: hydraHeaders(false),
+        headers: hydraHeaders(true),
         body,
       },
     });
