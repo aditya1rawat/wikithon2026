@@ -114,15 +114,6 @@ h1, h2, h3 {
   animation: slide-up 0.35s ease-out;
 }
 
-@keyframes route-loading-stripe {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(400%); }
-}
-
-.route-loading-stripe {
-  animation: route-loading-stripe 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-
 @keyframes route-loading-bar {
   0% { transform: translateX(-100%); }
   50% { transform: translateX(50%); }
