@@ -34,25 +34,51 @@ export async function getChunksForEntity(
 /**
  * Hydra sometimes returns chunks that are the raw JSON envelope we originally
  * uploaded (legacy multipart bug indexed the stringified app_knowledge payload
- * as content). Detect those and either extract the underlying article text or
- * skip the chunk entirely.
+ * as content). Detect those — including the truncated variants — and either
+ * extract the underlying article text or skip the chunk entirely.
  */
 function cleanChunkContent(content: string): string | null {
   const trimmed = content.trim();
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return trimmed;
-  try {
-    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-    const nestedText =
-      (typeof parsed.content === "object" && parsed.content !== null
-        ? (parsed.content as Record<string, unknown>).text
-        : undefined) ?? parsed.text;
-    if (typeof nestedText === "string" && nestedText.trim().length > 0) {
-      return nestedText.trim();
+  if (!looksLikeUploadEnvelope(trimmed)) return trimmed;
+  // Try a full parse first (rare: chunk is the whole JSON).
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      const nestedText =
+        (typeof parsed.content === "object" && parsed.content !== null
+          ? (parsed.content as Record<string, unknown>).text
+          : undefined) ?? parsed.text;
+      if (typeof nestedText === "string" && nestedText.trim().length > 0) {
+        return nestedText.trim();
+      }
+      return null;
+    } catch {
+      // fall through to text extraction
     }
-    return null;
-  } catch {
-    return trimmed;
   }
+  // Truncated envelope: try to slice out content.text manually.
+  const recovered = extractContentText(trimmed);
+  if (recovered) return recovered;
+  return null;
+}
+
+function looksLikeUploadEnvelope(text: string): boolean {
+  return /^[\s{[]*"?id"?\s*:\s*"[a-f0-9]{16,}"/.test(text) ||
+    /"tenant_id"\s*:\s*"consensuswiki"/.test(text) ||
+    /"sub_tenant_id"\s*:\s*"wikithon-/.test(text);
+}
+
+function extractContentText(envelope: string): string | null {
+  // Try to find "content": { "text": "..." } and capture the string value.
+  const match = envelope.match(/"content"\s*:\s*\{\s*"text"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (!match) return null;
+  try {
+    const decoded = JSON.parse(`"${match[1]}"`);
+    if (typeof decoded === "string" && decoded.trim().length > 0) return decoded.trim();
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export function excerptFor(content: string, maxChars = 320) {
