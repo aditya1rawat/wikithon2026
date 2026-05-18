@@ -18,12 +18,12 @@ const TYPE_COLORS: Record<string, string> = {
 
 export function ConnectionsUsed({ graphContext }: { graphContext: QueryGraphContext | null }) {
   const triplets = graphContext?.triplets ?? [];
-  const [mode, setMode] = useState<"1-step" | "multi-step">("1-step");
-
   const oneStep = useMemo(() => triplets.filter((t) => (t.hops ?? 1) === 1), [triplets]);
-  const multiStep = triplets;
+  const multiStep = useMemo(() => triplets.filter((t) => (t.hops ?? 1) > 1), [triplets]);
+  const hasBoth = oneStep.length > 0 && multiStep.length > 0;
+  const [mode, setMode] = useState<"1-step" | "multi-step">(oneStep.length > 0 ? "1-step" : "multi-step");
 
-  const shown = mode === "1-step" ? oneStep : multiStep;
+  const shown = mode === "1-step" ? oneStep : [...oneStep, ...multiStep];
 
   if (triplets.length === 0) return null;
 
@@ -31,22 +31,26 @@ export function ConnectionsUsed({ graphContext }: { graphContext: QueryGraphCont
     <div className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold">Connections used</h2>
-        <div className="inline-flex rounded-md border bg-muted/30 p-0.5 text-xs font-medium">
-          <button
-            type="button"
-            onClick={() => setMode("1-step")}
-            className={`rounded px-3 py-1 transition-colors ${mode === "1-step" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            1-step ({oneStep.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("multi-step")}
-            className={`rounded px-3 py-1 transition-colors ${mode === "multi-step" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            Multi-step ({multiStep.length})
-          </button>
-        </div>
+        {hasBoth ? (
+          <div className="inline-flex rounded-md border bg-muted/30 p-0.5 text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => setMode("1-step")}
+              className={`rounded px-3 py-1 transition-colors ${mode === "1-step" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              1-step ({oneStep.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("multi-step")}
+              className={`rounded px-3 py-1 transition-colors ${mode === "multi-step" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Multi-step ({triplets.length})
+            </button>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">{triplets.length} relation{triplets.length === 1 ? "" : "s"}</span>
+        )}
       </div>
       <TripletGraph triplets={shown} />
       <div className="mt-4 space-y-2">
