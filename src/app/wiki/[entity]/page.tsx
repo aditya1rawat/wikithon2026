@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, GitBranch, Quote, ShieldAlert, Sparkles } from "lucide-react";
 import { getEntityPage } from "@/lib/app-service";
+import { excerptFor, getChunksForEntity, type ChunksBySource } from "@/lib/recall";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CitedClaim, ContestedClaim } from "@/lib/types";
@@ -10,6 +11,7 @@ export default async function EntityPage({ params }: { params: Promise<{ entity:
   const { entity } = await params;
   const page = await getEntityPage(entity);
   if (!page) notFound();
+  const chunksBySource = await getChunksForEntity(page.entity.canonicalName, page.topic.hydraSubTenantId);
 
   return (
     <div className="space-y-6">
@@ -42,7 +44,7 @@ export default async function EntityPage({ params }: { params: Promise<{ entity:
       >
         <div className="space-y-4">
           {page.groups.contested.length ? (
-            page.groups.contested.map((item) => <ContestedCard key={item.claim.id} item={item} />)
+            page.groups.contested.map((item) => <ContestedCard key={item.claim.id} item={item} chunks={chunksBySource} />)
           ) : (
             <Empty text="No contested claims yet. Ingest more sources." />
           )}
@@ -57,7 +59,7 @@ export default async function EntityPage({ params }: { params: Promise<{ entity:
       >
         <div className="grid gap-3 md:grid-cols-2">
           {page.groups.established.length ? (
-            page.groups.established.map((claim) => <ClaimCard key={claim.id} claim={claim} />)
+            page.groups.established.map((claim) => <ClaimCard key={claim.id} claim={claim} chunks={chunksBySource} />)
           ) : (
             <Empty text="No established claims yet." />
           )}
@@ -72,7 +74,7 @@ export default async function EntityPage({ params }: { params: Promise<{ entity:
       >
         <div className="grid gap-3 md:grid-cols-2">
           {page.groups.singleSource.length ? (
-            page.groups.singleSource.map((claim) => <ClaimCard key={claim.id} claim={claim} />)
+            page.groups.singleSource.map((claim) => <ClaimCard key={claim.id} claim={claim} chunks={chunksBySource} />)
           ) : (
             <Empty text="No single-source claims yet." />
           )}
@@ -159,8 +161,9 @@ function ClaimSection({
   );
 }
 
-function ClaimCard({ claim }: { claim: CitedClaim }) {
+function ClaimCard({ claim, chunks }: { claim: CitedClaim; chunks?: ChunksBySource }) {
   const sourceLabel = `${claim.source.publisher ?? "Unknown source"} · ${claim.source.title}`;
+  const chunkText = chunks?.[claim.sourceId];
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
@@ -172,7 +175,12 @@ function ClaimCard({ claim }: { claim: CitedClaim }) {
           </div>
         </div>
         <p className="leading-7">{claim.claimText}</p>
-        {claim.chunkUuid ? (
+        {chunkText ? (
+          <blockquote className="rounded-md border-l-4 border-primary/40 bg-primary/5 px-3 py-2 text-sm leading-6 text-foreground/80">
+            <span className="block text-[10px] font-medium uppercase tracking-wide text-primary/80">Source excerpt</span>
+            <span className="mt-1 block">“{excerptFor(chunkText)}”</span>
+          </blockquote>
+        ) : claim.chunkUuid ? (
           <div className="rounded-md border-l-4 bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">Citation chunk: {claim.chunkUuid}</div>
         ) : (
           <div className="rounded-md border-l-4 bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">Citation chunk pending; source excerpt not yet available.</div>
@@ -189,7 +197,7 @@ function ClaimCard({ claim }: { claim: CitedClaim }) {
   );
 }
 
-function ContestedCard({ item }: { item: ContestedClaim }) {
+function ContestedCard({ item, chunks }: { item: ContestedClaim; chunks?: ChunksBySource }) {
   return (
     <Card>
       <CardContent className="space-y-4 p-4">
@@ -200,12 +208,12 @@ function ContestedCard({ item }: { item: ContestedClaim }) {
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <div className="text-sm font-medium text-muted-foreground">Claim</div>
-            <ClaimCard claim={item.claim} />
+            <ClaimCard claim={item.claim} chunks={chunks} />
           </div>
           {item.opposingClaims.map((claim) => (
             <div key={claim.id} className="space-y-2">
               <div className="text-sm font-medium text-muted-foreground">Opposing source</div>
-              <ClaimCard claim={claim} />
+              <ClaimCard claim={claim} chunks={chunks} />
             </div>
           ))}
         </div>
