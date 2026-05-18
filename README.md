@@ -8,7 +8,7 @@ Most wikis flatten the web into one voice. ConsensusWiki keeps every source's vo
 
 ---
 
-## TL;DR for judges
+## TL;DR
 
 | | |
 |---|---|
@@ -118,43 +118,135 @@ Hydra being slow no longer blocks the local pipeline. The UI surfaces both as se
 
 ## Routes
 
+Each route is a deliberate slice of the workflow. The order below mirrors the natural usage flow: ingest sources → explore an entity → see the topic graph → ask a question → revisit a saved answer.
+
 ### `/` — Dashboard
-- Hero with **live topic** chip and contradictions count callout in destructive tint.
-- **Topic stats** card: entities · claims · sources, plus a dedicated contradictions row counting deduped contradict pairs (no more counting one contradict relation N times).
-- **Top 12 entities** ranked by `claimCount + contestedCount × 3`.
-- **Recent sources** with the shared `<StatusPill>` (compact dual-pill workflow + hydra).
+
+**Purpose.** Single-glance read on the corpus. Tells you how rich the topic universe is right now and where the disagreement lives.
+
+**What you see.**
+- Big headline and color-coded CTAs into `/ingest` and `/graph`.
+- **Topic stats** card on the right: entity count, claim count, source count, plus a destructive-tinted **Contradictions** row counting deduped contradict *pairs* (not relations — one disputed claim no longer inflates the number).
+- Three explainer cards: **Established · Contested · Single-source** — these are the buckets every entity page uses.
+- **Entities list** — top 12 entities ranked by `claimCount + contestedCount × 3`. The ranking heuristic pushes the most-debated entities to the top. Each row is a link → `/wiki/[entity]`. Red badge on the right shows contested-claim count when > 0.
+- **Recent sources** — last 6 ingested URLs with the shared `<StatusPill>` showing both workflow and Hydra status.
+
+**How to use it.**
+- Land here first. Pick an entity that has a contested badge to see the most interesting page.
+- Watch the contradictions number tick up after a fresh ingest.
+
+---
 
 ### `/ingest`
-- Paste any URL. Server action fires `runIngestWorkflow` via `next/server` `after()`.
-- Real-time workflow timeline: 4 step pills with state-tinted backgrounds, animated `Loader2` spin on pending step.
-- **"Force retry"** button shows on stale `pending` rows (>5 min). **"Retry failed step"** on failed rows. Per-row **Hydra re-check** button calls `recheckHydra` server action against `verify_processing`.
-- Webhook endpoint at `/api/webhooks/hydra` (HMAC-SHA256 verified, deduped by `X-HydraDB-Delivery-ID`).
+
+**Purpose.** Add new sources to the topic and monitor the pipeline live.
+
+**What you see.**
+- **Ingest source** card (top): paste an article URL or attach a PDF, hit **Queue ingest**. Button spins ("Queuing…") while the server action runs.
+- **Ingest log** (below): every source ever ingested, newest first. Each row shows:
+  - Title + publisher + published date.
+  - Dual **StatusPill** stack: top pill is local workflow state (`pending → extracting → judging → complete` or `failed_fetch / failed_upload`), bottom pill is Hydra indexing state (`queued / in_progress / success / errored / unknown`).
+  - **Refresh icon** next to the Hydra pill: calls the `recheckHydra` server action, hits Hydra's `verify_processing` endpoint, updates the DB.
+  - **4-step workflow timeline** showing where the pipeline is (fetch · upload · poll · claims+graph). Active step pulses, failed steps go red, completed steps turn emerald.
+  - **Retry banner** when applicable. Red banner + "Retry failed step" for hard failures. Amber banner + "Force retry" when a source has been stuck in `pending` or `extracting` for >5 minutes.
+- Header chips summarize the log: `N complete`, `N in flight`, `N failed`.
+
+**How to use it.**
+- Paste any article URL. Watch the timeline animate. Workflow finishes locally in ~5 seconds — Hydra indexing finishes in the background and pings us via webhook when done.
+- For demo: ingest one URL live in front of judges. Show the timeline. Show the badge flip from `queued` → `success` via webhook with no page reload.
+- If a source has been stuck for hours, hit **Force retry** — it re-runs the local pipeline immediately and resets Hydra to `queued` so the next webhook tick updates it.
+
+---
 
 ### `/wiki/[entity]`
-- **Lede callout** with `Sparkles` ribbon and `Synthesized · N sources` meta.
-- Three-bucket grouping:
-  - **Contested** — side-by-side claim cards from contradicting sources with the LLM rationale.
-  - **Established** — claims with ≥2 sources or an `agree` relation.
-  - **Single-source** — isolated claims awaiting corroboration.
-- Each claim card: stance badge, confidence percentage, **chunk excerpt from Hydra recall** (when indexed), source title (line-clamped, tooltip), publisher chip.
-- Related-evidence cards with claim-pair diff + rationale (internal fallback strings filtered).
-- Source timeline from `sources.published_at`.
+
+**Purpose.** The actual wiki page. Everything we know about one entity, sliced by how reliable it is.
+
+**What you see.**
+- **Title + type badge** (PERSON, ORG, MODEL, PRODUCT, EVENT).
+- **Lede** — a Sparkles-marked callout block at the top with the LLM-synthesized summary plus `Synthesized · N sources` meta. Falls back to a dashed empty state when no lede has been generated yet.
+- **Contested claims** (red, top of the page) — claim cards rendered side-by-side with their opposing source. Each card has:
+  - Stance badge (`factual / opinion / prediction / leak / rumor`) + confidence percentage.
+  - Claim text.
+  - **Source excerpt** — actual quoted chunk pulled from HydraDB recall (when indexed). Real "press → see the underlying quote" UX. Falls back to "Citation chunk pending" placeholder when Hydra hasn't indexed the source yet.
+  - Publisher + linked article title.
+  - **Rationale banner** showing the LLM's reasoning for why the claims contradict (internal fallback rationales filtered out so users only see real explanations).
+- **Established claims** — claims with ≥2 supporting sources or an `agree` relation. Two-column grid.
+- **Single-source claims** — useful but isolated, waiting for corroboration. Two-column grid.
+- **Related evidence** — claim-pair diffs from the relations table for this entity (not just contradicts — qualifies and agrees too).
+- **Timeline** — every source mentioning this entity, ordered by publish date.
+
+**How to use it.**
+- Click any entity from the dashboard list.
+- Reach a page directly: `/wiki/openai`, `/wiki/anthropic`, `/wiki/gpt-5-5-instant`.
+- Aliases work: `/wiki/gpt-5` resolves to the GPT-5.5 Instant entity (model-family alias generation).
+- Unknown slug → renders a friendly "Entity not found" page with links back to the dashboard and ingest.
+
+---
 
 ### `/graph`
-- Cytoscape concentric layout with node colors by `EntityType` (model=blue, org=purple, person=green, etc.), size by claim count.
-- Edge styling: red contradict, green agree, amber qualify, dashed mentions.
-- Edges table below: sorted by relation impact (contradict → qualify → agree → mentions). Source-mention edges collapsed behind `<details>` to cut noise.
-- Truncated source/target labels with full text on hover.
+
+**Purpose.** Visualize the whole topic as a network. See which entities cluster, which sources mention what, and where the disputes are.
+
+**What you see.**
+- **Cytoscape canvas** (concentric layout, node colors keyed to entity type):
+  - <span style="color:#1554a5">**Blue**</span> = MODEL, <span style="color:#7e5bef">**Purple**</span> = ORG, <span style="color:#0f9b6e">**Green**</span> = PERSON, <span style="color:#c4651a">**Orange**</span> = PRODUCT, <span style="color:#b03a8a">**Magenta**</span> = EVENT, <span style="color:#94a3b8">**Slate rectangle**</span> = SOURCE.
+  - Node size scales with claim count.
+  - Edges: <span style="color:#d11b1b">**Red**</span> = contradict, <span style="color:#128e5e">**Green**</span> = agree, <span style="color:#c47900">**Amber**</span> = qualify, <span style="color:#cbd5e1">**Gray dashed**</span> = source mentions entity.
+- **Legend bar** below the canvas mapping colors to entity types and edge styles.
+- **Edges table** at the bottom, sorted by impact: contradict → qualify → agree → mentions. Source-mention rows (the noisy ones) collapsed behind a `<details>` disclosure.
+- Source / target labels truncated with full title on hover.
+
+**How to use it.**
+- Pan and zoom freely.
+- Click a node to focus (cytoscape default). The colors make the dispute hotspots obvious — anywhere two big nodes are joined by a red edge is a place to dig in.
+- Scan the Edges table for the most impactful relations first.
+
+---
 
 ### `/query`
-- Ask anything. Action loads up to 20 candidate sources, hits Hydra `fullRecall` for graph context, asks NIM to write the answer with inline `[N]` markers and `citedSourceIds`.
-- Renumbers citations post-hoc so the on-page numbering is always 1..N matching the citation list.
+
+**Purpose.** Ask an open question against the corpus and get a synthesized answer with citations.
+
+**What you see.**
+- **Ask the wiki** card on the left: question textarea + **Ask** button. The button disables and spins ("Thinking…") while the server action runs.
+- **Recent saved queries** on the right: last 8 questions you've asked, each linking to its saved page.
+
+**How it works under the hood.**
+1. Server action `askQuestion` loads up to 20 candidate sources from Postgres.
+2. Calls Hydra `fullRecall(question)` to fetch graph context (knowledge-graph triplets surrounding the question).
+3. Sends the question + numbered candidate sources to NIM with instructions to write the answer with inline `[N]` markers and a `citedSourceIds` array.
+4. Validates cited ids against the candidate set (drops hallucinations) and renumbers `[N]` markers post-hoc so they always run 1..N matching the citation order.
+5. If Hydra returned no triplets (free-tier backlog), falls back to building a graph from our Postgres `claim_relations` table for the cited sources so the Connections Used view always has something to show.
+6. Saves the row to `saved_queries` with the full graph_context JSONB and redirects to `/wiki/q/<slug>`.
+
+**Suggested questions** for the AI-industry demo corpus:
+- "How is Anthropic competing with OpenAI in enterprise?"
+- "How much money has Anthropic raised in 2026 and at what valuation?"
+- "Did GPT-5.5 ship as a real release or as a limited rollout?"
+- "Who is behind Recursive Superintelligence?"
+- "What AI safety concerns are tied to self-improving systems?"
+
+---
 
 ### `/wiki/q/[slug]`
-- Inline `<sup>[1]</sup>` anchors → click scrolls to numbered citation.
-- **Connections Used** card showing the knowledge-graph triplets Hydra returned for the question.
-- Each triplet rendered as `Source → PREDICATE → Target` with the chunk context inline.
-- Local-graph fallback: when Hydra returns no triplets (free-tier processing backlog), we synthesize triplets from our Postgres `claim_relations` table so the card always has something to show.
+
+**Purpose.** The persisted view of a single query — answer + citations + the knowledge-graph trace that produced it.
+
+**What you see.**
+- **Answer card** with the question as the title, badge "Saved query", and the synthesized markdown body. Inline `[N]` references are clickable `<sup>` anchors — clicking scrolls down to the matching numbered citation card.
+- **Connections used** card with a source badge:
+  - <span style="background:#dbeafe;color:#1554a5;padding:0 6px;border-radius:8px;font-size:11px">HydraDB graph</span> — triplets came from Hydra's `graph_context.query_paths` + `chunk_relations`. Predicates look like `RELATED_TO / FOUNDER_OF / DEVELOPED_BY`. Nodes are canonical entity names.
+  - <span style="background:#fef3c7;color:#92400e;padding:0 6px;border-radius:8px;font-size:11px">Local fallback</span> — Hydra returned nothing, triplets came from our Postgres `claim_relations` table. Predicates are `mentions / agree / contradict / qualify`. Nodes are source titles + entity names.
+  - **Cytoscape mini-graph** showing the triplets with type-colored nodes + edge labels.
+  - **Triplet rows** below: `source → PREDICATE → target` with chunk context excerpt when available.
+  - **1-step / Multi-step toggle** appears only when Hydra returns mixed hops. Single-class data hides the toggle and shows a count chip instead.
+- **Citations** card with numbered circular badges (`1`, `2`, `3`…) matching the inline `[N]` anchors. Each row: source title (clickable to original article), publisher, publish date, Hydra status badge.
+
+**How to use it.**
+- Click any `[N]` in the answer body → page scrolls to the matching citation card (`#cite-N` anchor).
+- Look at the source badge on **Connections used** to know whether Hydra's knowledge graph informed the answer or whether the local Postgres graph filled in.
+- Bookmarkable URL: every saved query has a stable slug, share with anyone.
 
 ---
 
