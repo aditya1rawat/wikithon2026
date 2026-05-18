@@ -161,16 +161,37 @@ ${JSON.stringify(claims.slice(0, 30))}`;
   return `${entityName} has ${claims.length} tracked claims. The page separates established, contested, and single-source material.`;
 }
 
-export async function synthesizeQueryAnswer(question: string) {
-  if (process.env.NIM_API_KEY) {
-    const prompt = `Answer an ad-hoc ConsensusWiki query with inline citation placeholders when available.
+export async function synthesizeQueryAnswer(
+  question: string,
+  candidates: { id: string; title: string; publisher?: string | null }[] = [],
+) {
+  if (process.env.NIM_API_KEY && candidates.length > 0) {
+    const sourceList = candidates
+      .map((c, i) => `${i + 1}. id=${c.id} title="${c.title}"${c.publisher ? ` publisher=${c.publisher}` : ""}`)
+      .join("\n");
+    const prompt = `Answer an ad-hoc ConsensusWiki query using only the listed sources.
+
+Available sources (cite by id):
+${sourceList}
 
 Return JSON matching exactly:
-{"answerMd":"markdown answer","citedSourceIds":["source ids if known"]}
+{"answerMd":"markdown answer summarizing what these sources say","citedSourceIds":["full id strings from the list above"]}
+
+Rules:
+- citedSourceIds MUST be a subset of the id strings shown above.
+- Only cite a source if it directly informs the answer.
+- Prefer 2-5 sources when relevant.
+- If no source is relevant, return an empty citedSourceIds array and say so in answerMd.
 
 Question: ${question}`;
-    const result = await completeJson(prompt, QueryAnswerSchema, `${prompt}\n\nThe previous response was invalid. JSON only.`);
-    return result;
+    try {
+      const result = await completeJson(prompt, QueryAnswerSchema, `${prompt}\n\nThe previous response was invalid. JSON only.`);
+      const validIds = new Set(candidates.map((c) => c.id));
+      const filteredIds = result.citedSourceIds.filter((id) => validIds.has(id));
+      return { answerMd: result.answerMd, citedSourceIds: filteredIds };
+    } catch {
+      // fall through to demo fallback
+    }
   }
   return QueryAnswerSchema.parse({ answerMd: await synthesizeDemoAnswer(question), citedSourceIds: [] });
 }
