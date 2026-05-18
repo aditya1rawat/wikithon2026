@@ -7,6 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CitedClaim, ContestedClaim } from "@/lib/types";
 
+const INTERNAL_RATIONALE_RE = /fallback (used|because)|provider (was )?unavailable/i;
+
+function visibleRationale(rationale: string | null | undefined) {
+  if (!rationale) return null;
+  if (INTERNAL_RATIONALE_RE.test(rationale)) return null;
+  return rationale;
+}
+
 export default async function EntityPage({ params }: { params: Promise<{ entity: string }> }) {
   const { entity } = await params;
   const page = await getEntityPage(entity);
@@ -97,7 +105,7 @@ export default async function EntityPage({ params }: { params: Promise<{ entity:
                     <Badge variant={relation.relation === "contradict" ? "destructive" : "secondary"}>{relation.relation}</Badge>
                   </div>
                   <MiniClaim claim={claimB} />
-                  {relation.rationale ? <p className="text-sm text-muted-foreground md:col-span-3">{relation.rationale}</p> : null}
+                  {visibleRationale(relation.rationale) ? <p className="text-sm text-muted-foreground md:col-span-3">{visibleRationale(relation.rationale)}</p> : null}
                 </div>
               );
             })
@@ -186,11 +194,15 @@ function ClaimCard({ claim, chunks }: { claim: CitedClaim; chunks?: ChunksBySour
           <div className="rounded-md border-l-4 bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">Citation chunk pending; source excerpt not yet available.</div>
         )}
         {claim.source.url ? (
-          <Link href={claim.source.url} className="block text-sm font-medium text-primary hover:underline">
+          <Link
+            href={claim.source.url}
+            title={sourceLabel}
+            className="block text-sm font-medium text-primary hover:underline line-clamp-2"
+          >
             {sourceLabel}
           </Link>
         ) : (
-          <div className="text-sm text-muted-foreground">{sourceLabel}</div>
+          <div className="text-sm text-muted-foreground line-clamp-2" title={sourceLabel}>{sourceLabel}</div>
         )}
       </CardContent>
     </Card>
@@ -217,7 +229,9 @@ function ContestedCard({ item, chunks }: { item: ContestedClaim; chunks?: Chunks
             </div>
           ))}
         </div>
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{item.relations[0]?.rationale}</div>
+        {visibleRationale(item.relations[0]?.rationale) ? (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{visibleRationale(item.relations[0]?.rationale)}</div>
+        ) : null}
       </CardContent>
     </Card>
   );
