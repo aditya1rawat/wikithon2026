@@ -64,6 +64,42 @@ interface HydraRecallShape {
   };
 }
 
+export async function buildLocalGraphContext(citedSourceIds: string[]): Promise<import("./types").QueryGraphContext | null> {
+  if (citedSourceIds.length === 0) return null;
+  const { store } = await import("./store");
+  const dashboard = await store.getDashboard();
+  const idToEntity = new Map(dashboard.entities.map((e) => [e.id, e]));
+  // Pull each cited source's full page graph via existing getEntityPage doesn't fit;
+  // load topic-wide graph and intersect with cited sources.
+  const graph = await store.getGraphData();
+  const citedSourceSet = new Set(citedSourceIds.map((id) => `source:${id}`));
+  const triplets: import("./types").QueryTriplet[] = [];
+  const seen = new Set<string>();
+  for (const edge of graph.edges) {
+    if (edge.relation === "mentions" || edge.relation === "cites") {
+      // Only keep mention edges where the source is in cited list (links source -> entity).
+      if (!citedSourceSet.has(edge.source)) continue;
+    }
+    const srcLabel = graph.nodes.find((n) => n.id === edge.source)?.label;
+    const tgtLabel = graph.nodes.find((n) => n.id === edge.target)?.label;
+    if (!srcLabel || !tgtLabel) continue;
+    const key = `${srcLabel}|${edge.relation}|${tgtLabel}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const srcEntity = idToEntity.get(edge.source);
+    const tgtEntity = idToEntity.get(edge.target);
+    triplets.push({
+      source: { name: srcLabel, type: srcEntity?.entityType ?? (edge.source.startsWith("source:") ? "SOURCE" : undefined) },
+      target: { name: tgtLabel, type: tgtEntity?.entityType },
+      predicate: edge.relation,
+      context: edge.rationale ?? null,
+      hops: edge.relation === "mentions" ? 1 : 2,
+    });
+  }
+  if (triplets.length === 0) return null;
+  return { triplets };
+}
+
 export function extractQueryGraphContext(recall: unknown): import("./types").QueryGraphContext | null {
   const r = recall as HydraRecallShape | null;
   if (!r?.graph_context) return null;
