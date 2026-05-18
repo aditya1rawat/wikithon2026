@@ -1,0 +1,63 @@
+# Files Claude Code should never read. Mirrors .gitignore plus a few extra
+# things that are huge or sensitive but tracked.
+
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# test output
+coverage/
+test-results/
+playwright-report/
+.playwright/
+
+# env / secrets — never let the agent read real keys
+.env
+.env.*
+!.env.example
+
+# lockfiles (huge, mostly noise for the agent)
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# local agent/editor state
+.agents/
+.claude/
+.cursor/
+.vscode/
+.idea/
+skills-lock.json
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# git internals
+.git/
+
+# Vercel / deploy artifacts
+.vercel/
+.turbo/
+
+# misc large binaries
+*.pdf
+*.zip
+*.tar.gz
+*.mp4
+*.mov
+*.png.bak
