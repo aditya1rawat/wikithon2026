@@ -4,9 +4,19 @@ import { getDashboard } from "@/lib/app-service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { DashboardData } from "@/lib/types";
+
+function rankEntities(entities: DashboardData["entities"]) {
+  return [...entities].sort((a, b) => {
+    const score = (e: DashboardData["entities"][number]) => e.claimCount + e.contestedCount * 3;
+    return score(b) - score(a);
+  });
+}
 
 export default async function DashboardPage() {
   const dashboard = await getDashboard();
+  const rankedEntities = rankEntities(dashboard.entities);
+  const topEntities = rankedEntities.slice(0, 12);
   return (
     <div className="space-y-8">
       <section className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
@@ -48,12 +58,17 @@ export default async function DashboardPage() {
             <Badge variant="secondary">{dashboard.entities.length} tracked</Badge>
           </CardHeader>
           <CardContent className="divide-y">
-            {dashboard.entities.map((entity) => (
-              <Link key={entity.id} href={`/wiki/${entity.id}`} className="flex items-center justify-between gap-4 py-4 hover:text-primary">
+            {topEntities.map((entity) => (
+              <Link key={entity.id} href={`/wiki/${entity.id}`} className="-mx-2 flex items-center justify-between gap-4 rounded-md px-2 py-3 transition-colors hover:bg-muted/40 hover:text-primary">
                 <div><div className="font-medium">{entity.canonicalName}</div><div className="text-sm text-muted-foreground">{entity.entityType}</div></div>
-                <div className="flex gap-2"><Badge>{entity.claimCount} claims</Badge>{entity.contestedCount > 0 ? <Badge variant="destructive">{entity.contestedCount} contested</Badge> : null}</div>
+                <div className="flex shrink-0 gap-2"><Badge>{entity.claimCount} claims</Badge>{entity.contestedCount > 0 ? <Badge variant="destructive">{entity.contestedCount} contested</Badge> : null}</div>
               </Link>
             ))}
+            {rankedEntities.length > 12 ? (
+              <div className="pt-3 text-xs text-muted-foreground">
+                Showing top 12 of {rankedEntities.length} tracked entities — ranked by claims and contested count.
+              </div>
+            ) : null}
           </CardContent>
         </Card>
         <Card>
