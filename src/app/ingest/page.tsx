@@ -65,17 +65,26 @@ export default async function IngestPage() {
                 <StatusBadge source={source} />
               </div>
               <WorkflowTimeline source={source} />
-              {isFailed(source.workflowStatus) ? (
-                <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3">
-                  <p className="text-sm text-destructive">Pipeline stopped at {source.workflowStatus}. Retry will re-run from the failed step.</p>
-                  <form action={retryIngest}>
-                    <input type="hidden" name="sourceId" value={source.id} />
-                    <Button type="submit" size="sm" variant="outline">
-                      <RotateCcw className="h-4 w-4" /> Retry failed step
-                    </Button>
-                  </form>
-                </div>
-              ) : null}
+              {(() => {
+                const retryable = needsRetry(source);
+                if (!retryable) return null;
+                const failed = isFailed(source.workflowStatus);
+                return (
+                  <div className={`mt-3 flex items-center justify-between gap-3 rounded-md border p-3 ${failed ? "border-destructive/30 bg-destructive/5" : "border-amber-300 bg-amber-50/60"}`}>
+                    <p className={`text-sm ${failed ? "text-destructive" : "text-amber-800"}`}>
+                      {failed
+                        ? `Pipeline stopped at ${source.workflowStatus}. Retry will re-run from the failed step.`
+                        : `Workflow has been ${source.workflowStatus} for over 5 minutes. Hydra may be stalled — retry runs local extraction immediately.`}
+                    </p>
+                    <form action={retryIngest}>
+                      <input type="hidden" name="sourceId" value={source.id} />
+                      <Button type="submit" size="sm" variant="outline">
+                        <RotateCcw className="h-4 w-4" /> {failed ? "Retry failed step" : "Force retry"}
+                      </Button>
+                    </form>
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </CardContent>
@@ -175,4 +184,16 @@ function StatusBadge({ source }: { source: Source }) {
 
 function isFailed(status: Source["workflowStatus"]) {
   return status === "failed_fetch" || status === "failed_upload";
+}
+
+const STALE_PENDING_MS = 5 * 60 * 1000;
+
+function needsRetry(source: Source) {
+  if (isFailed(source.workflowStatus)) return true;
+  if (source.workflowStatus === "pending" || source.workflowStatus === "extracting") {
+    const ingestedAt = Date.parse(source.ingestedAt);
+    if (Number.isNaN(ingestedAt)) return false;
+    return Date.now() - ingestedAt > STALE_PENDING_MS;
+  }
+  return false;
 }
