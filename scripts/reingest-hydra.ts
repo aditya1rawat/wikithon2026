@@ -70,7 +70,8 @@ async function main() {
         text: normalized.bodyText,
         metadata: { topic_id: "ai-industry", reingest_run: new Date().toISOString() },
       });
-      await sql`UPDATE sources SET hydra_status = 'queued' WHERE id = ${row.id}`;
+      const excerpt = buildBodyExcerpt(normalized.bodyText);
+      await sql`UPDATE sources SET hydra_status = 'queued', body_excerpt = ${excerpt} WHERE id = ${row.id}`;
       console.log(`ok: ${row.title}`);
       ok++;
     } catch (error) {
@@ -127,6 +128,16 @@ async function uploadKnowledge(input: {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const BODY_EXCERPT_MAX_CHARS = 1500;
+
+function buildBodyExcerpt(bodyText: string | undefined | null): string | null {
+  if (!bodyText) return null;
+  const normalized = bodyText.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  if (normalized.length <= BODY_EXCERPT_MAX_CHARS) return normalized;
+  return `${normalized.slice(0, BODY_EXCERPT_MAX_CHARS - 1).trimEnd()}…`;
 }
 
 function requireEnv(name: string) {

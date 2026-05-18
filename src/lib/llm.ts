@@ -9,6 +9,7 @@ export const ExtractedClaimSchema = z.object({
   claim: z.string(),
   stance: z.enum(["factual", "opinion", "prediction", "leak", "rumor"]),
   confidence: z.number().min(0).max(1),
+  evidenceQuote: z.string().min(1).optional().nullable(),
 });
 
 export const ClaimExtractionSchema = z.object({ claims: z.array(ExtractedClaimSchema) });
@@ -67,19 +68,34 @@ export async function extractClaims(text: string) {
   if (!process.env.NIM_API_KEY) {
     return ClaimExtractionSchema.parse({
       claims: [
-        { entity: "GPT-5", claim: text.includes("late") ? "GPT-5 will not be released until late 2026." : "OpenAI released GPT-5 as a generally available model in May 2026.", stance: text.includes("leak") ? "leak" : "factual", confidence: 0.82 },
+        {
+          entity: "GPT-5",
+          claim: text.includes("late")
+            ? "OpenAI's GPT-5 rollout will slip to late 2026 according to a leaked internal schedule."
+            : "OpenAI released GPT-5 as a generally available ChatGPT model in May 2026.",
+          stance: text.includes("leak") ? "leak" : "factual",
+          confidence: 0.82,
+          evidenceQuote: null,
+        },
       ],
     }).claims;
   }
   const prompt = `Extract atomic claims from this source.
 
 Return JSON matching exactly:
-{"claims":[{"entity":"string","claim":"string","stance":"factual|opinion|prediction|leak|rumor","confidence":0.0}]}
+{"claims":[{"entity":"string","claim":"string","stance":"factual|opinion|prediction|leak|rumor","confidence":0.0,"evidenceQuote":"string"}]}
 
 Rules:
-- Claims must be atomic and cite one entity.
-- Use concise claim text that preserves dates, numbers, and qualifiers.
-- Confidence is 0 to 1.
+- Each claim is atomic and cites exactly one entity (the subject of that claim).
+- claim MUST be a complete, self-contained sentence that stands alone without the article. It should include:
+    * the subject by name (do not start with a pronoun),
+    * the action or assertion in clear words,
+    * any relevant date / time window / version / quantity / benchmark / location from the source,
+    * the attribution when the source itself is reporting someone else's words (e.g., "According to a TechCrunch report,..." or "Sam Altman said in a press briefing that...").
+- Do NOT emit fragments like "released GPT-5.5" or "is the new default". Always write full sentences a reader could understand on their own.
+- evidenceQuote is the single, verbatim sentence from the source body that most directly supports the claim. Copy it character-for-character (do not paraphrase, do not merge sentences). If no single sentence supports it, set evidenceQuote to null.
+- stance: factual = on-the-record/observed event; opinion = analyst/commentator view; prediction = future-tense forecast; leak = sourced from leaked/unofficial material; rumor = unattributed or unverified.
+- confidence is 0 to 1 and reflects how well the source backs the claim.
 
 Source:
 ${truncateForPrompt(text)}`;
@@ -236,6 +252,7 @@ function fallbackExtractClaims(text: string) {
       claim: claimText,
       stance: "factual" as const,
       confidence: 0.62,
+      evidenceQuote: sentence,
     };
   });
   return ClaimExtractionSchema.parse({ claims }).claims;

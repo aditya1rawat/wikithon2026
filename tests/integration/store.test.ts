@@ -19,6 +19,7 @@ describe("memory store fallback", () => {
       hydraStatus: "in_progress",
       workflowStatus: "complete",
       workflowRunId: "wf-2",
+      bodyExcerpt: null,
     });
 
     const source = await store.getSource(id);
@@ -108,6 +109,7 @@ describe("memory store fallback", () => {
       hydraStatus: "queued",
       workflowStatus: "pending",
       workflowRunId: "wf-1",
+      bodyExcerpt: null,
     });
     await store.upsertSource({ ...source, title: "New source updated" });
     await store.updateSourceStatus(sourceId, "success");
@@ -144,6 +146,7 @@ describe("memory store fallback", () => {
         stance: "factual",
         confidence: 0.91,
         chunkUuid: "chunk-1",
+        evidenceQuote: null,
         extractedAt: "2026-05-16T12:03:00.000Z",
       },
     ]);
@@ -199,6 +202,7 @@ describe("memory store fallback", () => {
       hydraStatus: "success",
       workflowStatus: "complete",
       workflowRunId: "wf-used",
+      bodyExcerpt: null,
     });
     await store.upsertSource({
       id: orphanSourceId,
@@ -211,6 +215,7 @@ describe("memory store fallback", () => {
       hydraStatus: "queued",
       workflowStatus: "pending",
       workflowRunId: "wf-orphan",
+      bodyExcerpt: null,
     });
     const entity = await store.upsertEntityWithAliases({
       entity: {
@@ -232,6 +237,7 @@ describe("memory store fallback", () => {
         stance: "factual",
         confidence: 0.9,
         chunkUuid: null,
+        evidenceQuote: null,
         extractedAt: "2026-05-17T00:00:00.000Z",
       },
     ]);

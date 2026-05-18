@@ -40,6 +40,7 @@ export const demoSources: Source[] = sourceSpecs.map(([url, title, publisher, pu
   hydraStatus: "success",
   workflowStatus: "complete",
   workflowRunId: `demo-${sha256(url).slice(0, 8)}`,
+  bodyExcerpt: null,
 }));
 
 export const demoEntities: Entity[] = [
@@ -78,6 +79,7 @@ function claim(sourceUrl: string, entityId: string, claimText: string, stance: C
     stance,
     confidence: 0.84,
     chunkUuid: `chunk-${id.slice(0, 10)}`,
+    evidenceQuote: null,
     extractedAt: "2026-05-16T00:00:00.000Z",
   };
 }

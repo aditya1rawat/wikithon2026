@@ -22,6 +22,7 @@ export interface Source {
   hydraStatus: HydraStatus;
   workflowStatus: WorkflowStatus;
   workflowRunId: string | null;
+  bodyExcerpt: string | null;
 }
 
 export interface Entity {
@@ -46,6 +47,7 @@ export interface Claim {
   stance: ClaimStance;
   confidence: number | null;
   chunkUuid: string | null;
+  evidenceQuote: string | null;
   extractedAt: string;
 }
 

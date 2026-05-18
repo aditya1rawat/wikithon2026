@@ -171,7 +171,17 @@ function ClaimSection({
 
 function ClaimCard({ claim, chunks }: { claim: CitedClaim; chunks?: ChunksBySource }) {
   const sourceLabel = `${claim.source.publisher ?? "Unknown source"} · ${claim.source.title}`;
-  const chunkText = chunks?.[claim.sourceId];
+  const evidence = claim.evidenceQuote?.trim() || null;
+  const recalled = chunks?.[claim.sourceId];
+  const cached = claim.source.bodyExcerpt?.trim() || null;
+  const excerptText = evidence ?? recalled ?? cached;
+  const excerptSource: "evidence" | "hydra" | "cache" | null = evidence
+    ? "evidence"
+    : recalled
+      ? "hydra"
+      : cached
+        ? "cache"
+        : null;
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
@@ -183,10 +193,16 @@ function ClaimCard({ claim, chunks }: { claim: CitedClaim; chunks?: ChunksBySour
           </div>
         </div>
         <p className="leading-7">{claim.claimText}</p>
-        {chunkText ? (
+        {excerptText ? (
           <blockquote className="rounded-md border-l-4 border-primary/40 bg-primary/5 px-3 py-2 text-sm leading-6 text-foreground/80">
-            <span className="block text-[10px] font-medium uppercase tracking-wide text-primary/80">Source excerpt</span>
-            <span className="mt-1 block">“{excerptFor(chunkText)}”</span>
+            <span className="block text-[10px] font-medium uppercase tracking-wide text-primary/80">
+              {excerptSource === "evidence"
+                ? "Evidence quote"
+                : excerptSource === "hydra"
+                  ? "Source excerpt"
+                  : "Source excerpt (cached body)"}
+            </span>
+            <span className="mt-1 block">“{excerptFor(excerptText)}”</span>
           </blockquote>
         ) : claim.chunkUuid ? (
           <div className="rounded-md border-l-4 bg-muted/40 p-3 text-sm leading-6 text-muted-foreground">Citation chunk: {claim.chunkUuid}</div>

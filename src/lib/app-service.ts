@@ -113,6 +113,7 @@ export async function registerDemoIngest(url: string, title?: string) {
     hydraStatus: "queued",
     workflowStatus: "pending",
     workflowRunId: `local-${Date.now()}`,
+    bodyExcerpt: null,
   });
 }
 

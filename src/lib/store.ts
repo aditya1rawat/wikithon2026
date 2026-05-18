@@ -232,7 +232,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
   async function loadSnapshot(topicId = demoTopic.id): Promise<StoreSnapshot> {
     const [topicRows, sourceRows, entityRows, aliasRows, claimRows, relationRows, ledeRows] = await Promise.all([
       sql`SELECT id, title, hydra_sub_tenant_id, created_at FROM topics WHERE id = ${topicId} LIMIT 1`,
-      sql`SELECT id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id FROM sources WHERE topic_id = ${topicId}`,
+      sql`SELECT id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id, body_excerpt FROM sources WHERE topic_id = ${topicId}`,
       sql`SELECT id, topic_id, canonical_name, entity_type, hydra_entity_id, first_seen FROM entities WHERE topic_id = ${topicId}`,
       sql`
         SELECT ea.alias, ea.entity_id
@@ -241,7 +241,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
         WHERE e.topic_id = ${topicId}
       `,
       sql`
-        SELECT c.id, c.source_id, c.entity_id, c.claim_text, c.stance, c.confidence, c.chunk_uuid, c.extracted_at
+        SELECT c.id, c.source_id, c.entity_id, c.claim_text, c.stance, c.confidence, c.chunk_uuid, c.evidence_quote, c.extracted_at
         FROM claims c
         JOIN entities e ON e.id = c.entity_id
         WHERE e.topic_id = ${topicId}
@@ -298,7 +298,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
     },
     async getSource(id) {
       const rows = await sql`
-        SELECT id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id
+        SELECT id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id, body_excerpt
         FROM sources
         WHERE id = ${id}
         LIMIT 1
@@ -360,7 +360,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
     async upsertSource(source) {
       await ensureDemoTopic(source.topicId);
       const rows = await sql`
-        INSERT INTO sources (id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id)
+        INSERT INTO sources (id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id, body_excerpt)
         VALUES (
           ${source.id},
           ${source.topicId},
@@ -371,7 +371,8 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
           ${source.ingestedAt},
           ${source.hydraStatus},
           ${source.workflowStatus},
-          ${source.workflowRunId}
+          ${source.workflowRunId},
+          ${source.bodyExcerpt}
         )
         ON CONFLICT (id) DO UPDATE SET
           topic_id = EXCLUDED.topic_id,
@@ -382,8 +383,9 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
           ingested_at = EXCLUDED.ingested_at,
           hydra_status = EXCLUDED.hydra_status,
           workflow_status = EXCLUDED.workflow_status,
-          workflow_run_id = EXCLUDED.workflow_run_id
-        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id
+          workflow_run_id = EXCLUDED.workflow_run_id,
+          body_excerpt = COALESCE(EXCLUDED.body_excerpt, sources.body_excerpt)
+        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id, body_excerpt
       `;
       return rowToSource(rows[0]);
     },
@@ -392,7 +394,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
         UPDATE sources
         SET hydra_status = ${status}
         WHERE id = ${id}
-        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id
+        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id, body_excerpt
       `;
       return rows[0] ? rowToSource(rows[0]) : null;
     },
@@ -401,7 +403,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
         UPDATE sources
         SET workflow_status = ${status}
         WHERE id = ${id}
-        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id
+        RETURNING id, topic_id, url, title, publisher, published_at, ingested_at, hydra_status, workflow_status, workflow_run_id, body_excerpt
       `;
       return rows[0] ? rowToSource(rows[0]) : null;
     },
@@ -447,7 +449,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
       const inserted: Claim[] = [];
       for (const claim of claims) {
         const rows = await sql`
-          INSERT INTO claims (id, source_id, entity_id, claim_text, stance, confidence, chunk_uuid, extracted_at)
+          INSERT INTO claims (id, source_id, entity_id, claim_text, stance, confidence, chunk_uuid, evidence_quote, extracted_at)
           VALUES (
             ${claim.id},
             ${claim.sourceId},
@@ -456,6 +458,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
             ${claim.stance},
             ${claim.confidence},
             ${claim.chunkUuid},
+            ${claim.evidenceQuote},
             ${claim.extractedAt}
           )
           ON CONFLICT (id) DO UPDATE SET
@@ -465,8 +468,9 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
             stance = EXCLUDED.stance,
             confidence = EXCLUDED.confidence,
             chunk_uuid = EXCLUDED.chunk_uuid,
+            evidence_quote = COALESCE(EXCLUDED.evidence_quote, claims.evidence_quote),
             extracted_at = EXCLUDED.extracted_at
-          RETURNING id, source_id, entity_id, claim_text, stance, confidence, chunk_uuid, extracted_at
+          RETURNING id, source_id, entity_id, claim_text, stance, confidence, chunk_uuid, evidence_quote, extracted_at
         `;
         inserted.push(rowToClaim(rows[0]));
       }
@@ -723,6 +727,7 @@ function rowToSource(row: Record<string, unknown>): Source {
     hydraStatus: String(row.hydra_status ?? "queued") as HydraStatus,
     workflowStatus: String(row.workflow_status ?? "pending") as WorkflowStatus,
     workflowRunId: nullableString(row.workflow_run_id),
+    bodyExcerpt: nullableString(row.body_excerpt),
   };
 }
 
@@ -750,6 +755,7 @@ function rowToClaim(row: Record<string, unknown>): Claim {
     stance: String(row.stance) as Claim["stance"],
     confidence: row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
     chunkUuid: nullableString(row.chunk_uuid),
+    evidenceQuote: nullableString(row.evidence_quote),
     extractedAt: toIsoString(row.extracted_at),
   };
 }

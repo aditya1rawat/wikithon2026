@@ -29,6 +29,7 @@ interface ExtractedWorkflowClaim {
   stance: Claim["stance"];
   confidence: number;
   entityId: string;
+  evidenceQuote?: string | null;
 }
 
 export async function runIngestWorkflow(input: WorkflowInput) {
@@ -90,6 +91,7 @@ export async function fetchAndNormalize(input: WorkflowInput): Promise<WorkflowC
     publishedAt: normalized.publishedAt ?? registered.publishedAt,
     hydraStatus: "queued",
     workflowStatus: "pending",
+    bodyExcerpt: buildBodyExcerpt(normalized.bodyText),
   };
   await safeUpsertSource(source);
   return { topic, url, source, normalized };
@@ -150,6 +152,7 @@ export async function extractClaimsStep(context: WorkflowContext) {
       stance: claim.stance,
       confidence: claim.confidence,
       chunkUuid: null,
+      evidenceQuote: claim.evidenceQuote ?? null,
       extractedAt: new Date().toISOString(),
     });
   }
@@ -296,6 +299,16 @@ function safeRevalidateTag(tag: string) {
   } catch {
     // Cache invalidation is best effort in tests and local fallback mode.
   }
+}
+
+const BODY_EXCERPT_MAX_CHARS = 1500;
+
+function buildBodyExcerpt(bodyText: string | undefined | null): string | null {
+  if (!bodyText) return null;
+  const normalized = bodyText.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  if (normalized.length <= BODY_EXCERPT_MAX_CHARS) return normalized;
+  return `${normalized.slice(0, BODY_EXCERPT_MAX_CHARS - 1).trimEnd()}…`;
 }
 
 function safeRevalidatePath(path: string) {
