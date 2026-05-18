@@ -1,5 +1,6 @@
-import { AlertTriangle, CheckCircle2, Clock3, FileText, Loader2, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Loader2, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
 import { ingestSource, recheckHydra, retryIngest } from "./actions";
+import { StatusPill } from "@/components/status-pill";
 import { listSources } from "@/lib/app-service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,7 +63,22 @@ export default async function IngestPage() {
                   <div className="truncate font-medium leading-6">{source.title}</div>
                   <div className="text-sm text-muted-foreground">{source.publisher} · {source.publishedAt?.slice(0, 10) ?? "undated"}</div>
                 </div>
-                <StatusBadge source={source} />
+                <div className="flex shrink-0 items-start gap-1.5">
+                  <StatusPill source={source} />
+                  {source.hydraStatus === "queued" || source.hydraStatus === "in_progress" || source.hydraStatus === "errored" || source.hydraStatus === "unknown" ? (
+                    <form action={recheckHydra}>
+                      <input type="hidden" name="sourceId" value={source.id} />
+                      <button
+                        type="submit"
+                        title="Re-check Hydra status now"
+                        className="mt-7 inline-flex h-6 w-6 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-primary"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        <span className="sr-only">Re-check Hydra status</span>
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
               </div>
               <WorkflowTimeline source={source} />
               {(() => {
@@ -146,56 +162,6 @@ function step(label: string, detail: string, state: StepState) {
     error: "h-4 w-4 text-destructive",
   }[state];
   return { label, detail, icon, tone, state };
-}
-
-function StatusBadge({ source }: { source: Source }) {
-  const wf = source.workflowStatus;
-  const hydra = source.hydraStatus;
-  const workflowFailed = wf === "failed_fetch" || wf === "failed_upload";
-  const wfActive = wf === "extracting" || wf === "judging" || wf === "pending";
-  const hydraNonTerminal = hydra === "queued" || hydra === "in_progress" || hydra === "errored" || hydra === "unknown";
-  return (
-    <div className="flex shrink-0 flex-col items-end gap-1.5">
-      <span
-        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-          workflowFailed
-            ? "border-destructive/40 bg-destructive/10 text-destructive"
-            : wf === "complete"
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-amber-300 bg-amber-50 text-amber-700"
-        }`}
-      >
-        {wfActive ? <Clock3 className="h-3 w-3 animate-pulse-soft" /> : workflowFailed ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-        workflow · {wf}
-      </span>
-      <div className="flex items-center gap-1.5">
-        <span
-          className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-            hydra === "errored"
-              ? "border-destructive/40 bg-destructive/10 text-destructive"
-              : hydra === "success"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                : "border-slate-300 bg-slate-50 text-slate-600"
-          }`}
-        >
-          hydra · {hydra}
-        </span>
-        {hydraNonTerminal ? (
-          <form action={recheckHydra}>
-            <input type="hidden" name="sourceId" value={source.id} />
-            <button
-              type="submit"
-              title="Re-check Hydra status now"
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-primary"
-            >
-              <RefreshCw className="h-3 w-3" />
-              <span className="sr-only">Re-check Hydra status</span>
-            </button>
-          </form>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 function isFailed(status: Source["workflowStatus"]) {

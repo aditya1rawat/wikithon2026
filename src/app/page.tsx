@@ -4,6 +4,7 @@ import { getDashboard } from "@/lib/app-service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusPill } from "@/components/status-pill";
 import type { DashboardData } from "@/lib/types";
 
 function rankEntities(entities: DashboardData["entities"]) {
@@ -76,9 +77,10 @@ export default async function DashboardPage() {
           <CardContent className="space-y-4">
             {dashboard.sources.map((source) => (
               <div key={source.id} className="rounded-md border bg-card p-3">
-                <div className="font-medium leading-6">{source.title}</div>
+                <div className="font-medium leading-6 line-clamp-2" title={source.title}>{source.title}</div>
                 <div className="mt-1 flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                  <span>{source.publisher}</span><Badge variant="secondary">{source.hydraStatus}</Badge>
+                  <span>{source.publisher}</span>
+                  <StatusPill source={source} compact />
                 </div>
               </div>
             ))}
