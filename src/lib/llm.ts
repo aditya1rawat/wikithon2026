@@ -167,28 +167,45 @@ export async function synthesizeQueryAnswer(
 ) {
   if (process.env.NIM_API_KEY && candidates.length > 0) {
     const sourceList = candidates
-      .map((c, i) => `${i + 1}. id=${c.id} title="${c.title}"${c.publisher ? ` publisher=${c.publisher}` : ""}`)
+      .map((c, i) => `[${i + 1}] id=${c.id} title="${c.title}"${c.publisher ? ` publisher=${c.publisher}` : ""}`)
       .join("\n");
     const prompt = `Answer an ad-hoc ConsensusWiki query using only the listed sources.
 
-Available sources (cite by id):
+Available sources (numbered):
 ${sourceList}
 
 Return JSON matching exactly:
-{"answerMd":"markdown answer summarizing what these sources say","citedSourceIds":["full id strings from the list above"]}
+{"answerMd":"markdown answer with inline numeric citations","citedSourceIds":["full id strings from the list above, in the order they first appear in answerMd"]}
 
 Rules:
-- citedSourceIds MUST be a subset of the id strings shown above.
+- answerMd MUST place inline citations in square brackets immediately after the supporting clause, e.g. "Anthropic raised $50B [3]." Use the bracket numbers shown above.
+- Multiple supporting sources in one clause use comma-separated numbers: "...both labs agreed [2, 5]."
 - Only cite a source if it directly informs the answer.
+- citedSourceIds MUST list the full id strings (from "id=..." in the source list) in the order they first appear in answerMd. The first id corresponds to [1] in the answer's renumbered output, second to [2], etc.
 - Prefer 2-5 sources when relevant.
-- If no source is relevant, return an empty citedSourceIds array and say so in answerMd.
+- If no source is relevant, return an empty citedSourceIds array and say so in answerMd without any [n] markers.
 
 Question: ${question}`;
     try {
       const result = await completeJson(prompt, QueryAnswerSchema, `${prompt}\n\nThe previous response was invalid. JSON only.`);
-      const validIds = new Set(candidates.map((c) => c.id));
-      const filteredIds = result.citedSourceIds.filter((id) => validIds.has(id));
-      return { answerMd: result.answerMd, citedSourceIds: filteredIds };
+      const candidateById = new Map(candidates.map((c) => [c.id, c]));
+      const candidateIndex = new Map(candidates.map((c, i) => [c.id, i + 1]));
+      const cited = (result.citedSourceIds ?? []).filter((id) => candidateById.has(id));
+      // Build mapping from original candidate number -> renumbered position (1..N) in citedSourceIds.
+      const originalToRenumbered = new Map<number, number>();
+      cited.forEach((id, i) => {
+        const original = candidateIndex.get(id);
+        if (original !== undefined) originalToRenumbered.set(original, i + 1);
+      });
+      const renumbered = result.answerMd.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (_, list: string) => {
+        const nums = list
+          .split(",")
+          .map((n) => parseInt(n.trim(), 10))
+          .map((n) => originalToRenumbered.get(n))
+          .filter((n): n is number => n !== undefined);
+        return nums.length ? `[${nums.join(", ")}]` : "";
+      });
+      return { answerMd: renumbered, citedSourceIds: cited };
     } catch {
       // fall through to demo fallback
     }
