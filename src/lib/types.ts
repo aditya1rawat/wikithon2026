@@ -65,6 +65,24 @@ export interface Lede {
   generatedAt: string;
 }
 
+export interface QueryTripletEntity {
+  name: string;
+  type?: string;
+  entityId?: string;
+}
+
+export interface QueryTriplet {
+  source: QueryTripletEntity;
+  target: QueryTripletEntity;
+  predicate: string;
+  context?: string | null;
+  hops?: number;
+}
+
+export interface QueryGraphContext {
+  triplets: QueryTriplet[];
+}
+
 export interface SavedQuery {
   id: string;
   topicId: string;
@@ -72,6 +90,7 @@ export interface SavedQuery {
   question: string;
   answerMd: string;
   citedSourceIds: string[];
+  graphContext: QueryGraphContext | null;
   savedAt: string;
 }
 

@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { demoSavedQueries, demoTopic, stableClaimId, stableSourceId } from "./demo-data";
 import { groupClaimsForEntity, normalizeAlias, store } from "./store";
-import type { Claim, ClaimRelation, Entity, HydraStatus, Lede, Source, WorkflowStatus } from "./types";
+import type { Claim, ClaimRelation, Entity, HydraStatus, Lede, QueryGraphContext, Source, WorkflowStatus } from "./types";
 
 export { groupClaimsForEntity, normalizeAlias, stableClaimId, stableSourceId };
 
@@ -85,8 +85,13 @@ export async function upsertLede(lede: Lede) {
   return saved;
 }
 
-export async function saveQuery(question: string, answerMd: string, citedSourceIds: string[] = []) {
-  const saved = await store.saveQuery(question, answerMd, citedSourceIds);
+export async function saveQuery(
+  question: string,
+  answerMd: string,
+  citedSourceIds: string[] = [],
+  graphContext: QueryGraphContext | null = null,
+) {
+  const saved = await store.saveQuery(question, answerMd, citedSourceIds, undefined, graphContext);
   safeRevalidatePath(`/wiki/q/${saved.slug}`);
   return saved;
 }

@@ -23,6 +23,7 @@ import type {
   GraphData,
   HydraStatus,
   Lede,
+  QueryGraphContext,
   SavedQuery,
   Source,
   Topic,
@@ -42,7 +43,7 @@ export interface ConsensusStore {
   getGraphData(topicId?: string): Promise<GraphData>;
   getSavedQuery(slugOrId: string): Promise<SavedQuery | null>;
   listSavedQueries(limit?: number): Promise<SavedQuery[]>;
-  saveQuery(question: string, answerMd: string, citedSourceIds?: string[], topicId?: string): Promise<SavedQuery>;
+  saveQuery(question: string, answerMd: string, citedSourceIds?: string[], topicId?: string, graphContext?: QueryGraphContext | null): Promise<SavedQuery>;
   upsertSource(source: Source): Promise<Source>;
   updateSourceStatus(id: string, status: HydraStatus): Promise<Source | null>;
   updateSourceWorkflowStatus(id: string, status: WorkflowStatus): Promise<Source | null>;
@@ -137,7 +138,7 @@ export function createMemoryStore(options: { seedDemoData?: boolean; now?: () =>
     async listSavedQueries(limit = 8) {
       return savedQueries.slice(0, limit).map(cloneSavedQuery);
     },
-    async saveQuery(question, answerMd, citedSourceIds = [], topicId = demoTopic.id) {
+    async saveQuery(question, answerMd, citedSourceIds = [], topicId = demoTopic.id, graphContext = null) {
       const identity = savedQueryIdentity(question);
       const saved: SavedQuery = {
         id: identity.id,
@@ -146,6 +147,7 @@ export function createMemoryStore(options: { seedDemoData?: boolean; now?: () =>
         question,
         answerMd,
         citedSourceIds,
+        graphContext: graphContext ?? null,
         savedAt: now().toISOString(),
       };
       const existingIndex = savedQueries.findIndex((query) => query.id === saved.id);
@@ -321,7 +323,7 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
     },
     async getSavedQuery(slugOrId) {
       const rows = await sql`
-        SELECT id, topic_id, slug, question, answer_md, cited_source_ids, saved_at
+        SELECT id, topic_id, slug, question, answer_md, cited_source_ids, graph_context, saved_at
         FROM saved_queries
         WHERE id = ${slugOrId} OR slug = ${slugOrId}
         LIMIT 1
@@ -330,26 +332,28 @@ export function createPostgresStore(databaseUrl = process.env.DATABASE_URL ?? ""
     },
     async listSavedQueries(limit = 8) {
       const rows = await sql`
-        SELECT id, topic_id, slug, question, answer_md, cited_source_ids, saved_at
+        SELECT id, topic_id, slug, question, answer_md, cited_source_ids, graph_context, saved_at
         FROM saved_queries
         ORDER BY saved_at DESC
         LIMIT ${limit}
       `;
       return rows.map(rowToSavedQuery);
     },
-    async saveQuery(question, answerMd, citedSourceIds = [], topicId = demoTopic.id) {
+    async saveQuery(question, answerMd, citedSourceIds = [], topicId = demoTopic.id, graphContext = null) {
       await ensureDemoTopic(topicId);
       const identity = savedQueryIdentity(question);
+      const graphJson = graphContext ? JSON.stringify(graphContext) : null;
       const rows = await sql`
-        INSERT INTO saved_queries (id, topic_id, slug, question, answer_md, cited_source_ids, saved_at)
-        VALUES (${identity.id}, ${topicId}, ${identity.slug}, ${question}, ${answerMd}, ${citedSourceIds}, ${new Date().toISOString()})
+        INSERT INTO saved_queries (id, topic_id, slug, question, answer_md, cited_source_ids, graph_context, saved_at)
+        VALUES (${identity.id}, ${topicId}, ${identity.slug}, ${question}, ${answerMd}, ${citedSourceIds}, ${graphJson}, ${new Date().toISOString()})
         ON CONFLICT (id) DO UPDATE SET
           question = EXCLUDED.question,
           slug = EXCLUDED.slug,
           answer_md = EXCLUDED.answer_md,
           cited_source_ids = EXCLUDED.cited_source_ids,
+          graph_context = EXCLUDED.graph_context,
           saved_at = EXCLUDED.saved_at
-        RETURNING id, topic_id, slug, question, answer_md, cited_source_ids, saved_at
+        RETURNING id, topic_id, slug, question, answer_md, cited_source_ids, graph_context, saved_at
       `;
       return rowToSavedQuery(rows[0]);
     },
@@ -778,8 +782,22 @@ function rowToSavedQuery(row: Record<string, unknown>): SavedQuery {
     question: String(row.question),
     answerMd: String(row.answer_md),
     citedSourceIds: Array.isArray(row.cited_source_ids) ? row.cited_source_ids.map(String) : [],
+    graphContext: parseGraphContext(row.graph_context),
     savedAt: toIsoString(row.saved_at),
   };
+}
+
+function parseGraphContext(value: unknown): QueryGraphContext | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value) as QueryGraphContext;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === "object") return value as QueryGraphContext;
+  return null;
 }
 
 function nullableString(value: unknown) {
@@ -821,5 +839,9 @@ function cloneLede(lede: Lede): Lede {
 }
 
 function cloneSavedQuery(query: SavedQuery): SavedQuery {
-  return { ...query, citedSourceIds: [...query.citedSourceIds] };
+  return {
+    ...query,
+    citedSourceIds: [...query.citedSourceIds],
+    graphContext: query.graphContext ? { triplets: query.graphContext.triplets.map((t) => ({ ...t })) } : null,
+  };
 }

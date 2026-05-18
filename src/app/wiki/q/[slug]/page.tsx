@@ -5,6 +5,7 @@ import { BookOpen, Link2 } from "lucide-react";
 import { getSavedQuery, getSourcesByIds } from "@/lib/app-service";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConnectionsUsed } from "@/components/connections-used";
 import type { Source } from "@/lib/types";
 
 export default async function SavedQueryPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -34,6 +35,8 @@ export default async function SavedQueryPage({ params }: { params: Promise<{ slu
           </div>
         </CardContent>
       </Card>
+
+      <ConnectionsUsed graphContext={query.graphContext} />
 
       <Card>
         <CardHeader>

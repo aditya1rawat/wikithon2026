@@ -151,6 +151,7 @@ export const demoSavedQueries: SavedQuery[] = [
     question: "what's contested about GPT-5 release date?",
     answerMd: "Two source clusters disagree. OpenAI-facing coverage says GPT-5 became generally available in May 2026, while leak coverage says the release will not happen until late 2026. The current consensus is therefore not a single date, but a contested release-window story.",
     citedSourceIds: [sourceId(sourceSpecs[0][0]), sourceId(sourceSpecs[1][0])],
+    graphContext: null,
     savedAt: "2026-05-16T03:00:00.000Z",
   },
 ];
