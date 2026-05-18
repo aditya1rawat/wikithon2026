@@ -20,12 +20,38 @@ export async function getChunksForEntity(
       const sourceId = chunk?.source_id;
       const content = chunk?.chunk_content?.trim();
       if (!sourceId || !content) continue;
-      if (!bySource[sourceId]) bySource[sourceId] = content;
+      const cleaned = cleanChunkContent(content);
+      if (!cleaned) continue;
+      if (!bySource[sourceId]) bySource[sourceId] = cleaned;
     }
     return bySource;
   } catch (error) {
     console.warn(`[recall] failed for entity ${canonicalName}:`, error);
     return {};
+  }
+}
+
+/**
+ * Hydra sometimes returns chunks that are the raw JSON envelope we originally
+ * uploaded (legacy multipart bug indexed the stringified app_knowledge payload
+ * as content). Detect those and either extract the underlying article text or
+ * skip the chunk entirely.
+ */
+function cleanChunkContent(content: string): string | null {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return trimmed;
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const nestedText =
+      (typeof parsed.content === "object" && parsed.content !== null
+        ? (parsed.content as Record<string, unknown>).text
+        : undefined) ?? parsed.text;
+    if (typeof nestedText === "string" && nestedText.trim().length > 0) {
+      return nestedText.trim();
+    }
+    return null;
+  } catch {
+    return trimmed;
   }
 }
 
