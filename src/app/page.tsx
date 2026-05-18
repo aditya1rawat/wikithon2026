@@ -40,12 +40,28 @@ export default async function DashboardPage() {
             </Button>
           </div>
         </div>
-        <Card className="border-primary/10 bg-gradient-to-br from-card to-primary/5 shadow-sm">
-          <CardHeader><CardTitle>Topic stats</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-3 gap-3">
-            <Stat label="Entities" value={dashboard.stats.entities} />
-            <Stat label="Claims" value={dashboard.stats.claims} />
-            <Stat label="Contradictions" value={dashboard.stats.contradictions} tone="destructive" />
+        <Card className="flex flex-col border-primary/10 bg-gradient-to-br from-card to-primary/5 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle>Topic stats</CardTitle>
+            <p className="text-xs text-muted-foreground">Live counts from the current ingest corpus.</p>
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              <Stat label="Entities" value={dashboard.stats.entities} />
+              <Stat label="Claims" value={dashboard.stats.claims} />
+              <Stat label="Sources" value={dashboard.stats.sources} />
+            </div>
+            <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-destructive/80">Contradictions</span>
+                <span className={`text-2xl font-semibold tabular-nums ${dashboard.stats.contradictions > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  {dashboard.stats.contradictions}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-destructive/70">
+                Distinct contradict pairs across all entities.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </section>
@@ -95,12 +111,11 @@ export default async function DashboardPage() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "destructive" }) {
-  const valueClass = tone === "destructive" && value > 0 ? "text-destructive" : "";
+function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md border bg-background/60 p-3 backdrop-blur-sm">
-      <div className={`text-2xl font-semibold tabular-nums ${valueClass}`}>{value}</div>
-      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
     </div>
   );
 }
