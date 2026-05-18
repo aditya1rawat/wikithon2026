@@ -17,7 +17,7 @@ Tasks 1-11 done. Task 12 remaining. Quality review for Task 11 still running in 
 | 9. retry button wired | ✅ DONE | `2572e91` |
 | 10. shared slugify | ✅ DONE | `1b60a49` |
 | 11. e2e specs live-data | ✅ DONE | `4a8634c` |
-| 12. UX overhaul (impeccable + frontend-design) | ⬜ TODO | — |
+| 12. UX overhaul (impeccable + frontend-design) | ✅ DONE | `85c835e` |
 
 Current HEAD: `3e601b9`. Unit/integration 38/38 pass. E2e 4/4 pass. Lint clean. Build clean.
 
