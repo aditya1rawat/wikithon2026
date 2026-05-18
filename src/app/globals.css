@@ -1,24 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7fafc;
-  --foreground: #122033;
+  --background: #f6f8fb;
+  --foreground: #0b1726;
   --card: #ffffff;
-  --card-foreground: #122033;
-  --primary: #1667b7;
+  --card-foreground: #0b1726;
+  --primary: #1554a5;
   --primary-foreground: #ffffff;
-  --secondary: #dff5f0;
-  --secondary-foreground: #16443c;
+  --secondary: #dcefe9;
+  --secondary-foreground: #133b34;
   --muted: #e7edf4;
-  --muted-foreground: #536170;
-  --accent: #f6c94b;
+  --muted-foreground: #4b5868;
+  --accent: #f4b740;
   --accent-foreground: #3b2607;
-  --destructive: #dc2626;
+  --destructive: #d11b1b;
   --destructive-foreground: #ffffff;
-  --border: #cbd7e4;
-  --input: #cbd7e4;
-  --ring: #1667b7;
-  --radius: 0.5rem;
+  --success: #128e5e;
+  --success-foreground: #ffffff;
+  --warning: #c47900;
+  --warning-foreground: #ffffff;
+  --border: #d3dce6;
+  --input: #d3dce6;
+  --ring: #1554a5;
+  --radius: 0.625rem;
 }
 
 @theme inline {
@@ -36,11 +40,15 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --font-sans: Arial, Helvetica, sans-serif;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 * {
@@ -54,10 +62,19 @@ html {
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 8% 0%, rgba(246, 201, 75, 0.18), transparent 30rem),
-    linear-gradient(180deg, #f7fafc, #eef5fb);
+    radial-gradient(circle at 6% -10%, rgba(244, 183, 64, 0.14), transparent 32rem),
+    radial-gradient(circle at 96% 6%, rgba(21, 84, 165, 0.10), transparent 30rem),
+    linear-gradient(180deg, #f6f8fb 0%, #eaf1f8 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv11", "ss01";
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
 }
 
 .focus-ring {
@@ -66,4 +83,33 @@ body {
 
 .focus-ring:focus-visible {
   box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 1.8s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(21, 84, 165, 0.08), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.35s ease-out;
 }

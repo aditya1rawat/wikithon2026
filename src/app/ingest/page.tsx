@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock3, FileText, RotateCcw, UploadCloud } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, FileText, Loader2, RotateCcw, UploadCloud } from "lucide-react";
 import { ingestSource, retryIngest } from "./actions";
 import { listSources } from "@/lib/app-service";
 import { Button } from "@/components/ui/button";
@@ -50,11 +50,16 @@ export default async function IngestPage() {
               </Button>
             </div>
           </div>
+          {sources.length === 0 ? (
+            <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+              No sources yet. Queue one above to start the pipeline.
+            </div>
+          ) : null}
           {sources.map((source) => (
-            <div key={source.id} className="rounded-md border p-4">
+            <div key={source.id} className="animate-slide-up rounded-lg border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="font-medium leading-6">{source.title}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-medium leading-6">{source.title}</div>
                   <div className="text-sm text-muted-foreground">{source.publisher} · {source.publishedAt?.slice(0, 10) ?? "undated"}</div>
                 </div>
                 <StatusBadge source={source} />
@@ -83,15 +88,21 @@ function WorkflowTimeline({ source }: { source: Source }) {
   const steps = buildSteps(source);
   return (
     <ol className="mt-4 grid gap-2 sm:grid-cols-4">
-      {steps.map((step) => {
+      {steps.map((step, idx) => {
         const StepIcon = step.icon;
+        const stateStyles = {
+          done: "border-emerald-200 bg-emerald-50/60",
+          pending: "border-amber-200 bg-amber-50/40",
+          error: "border-destructive/30 bg-destructive/5",
+        }[step.state];
         return (
-          <li key={step.label} className="rounded-md border bg-background p-3">
+          <li key={step.label} className={`relative rounded-md border p-3 transition-colors ${stateStyles}`}>
             <div className="flex items-center gap-2">
-              <StepIcon className={step.tone} />
+              <StepIcon className={`${step.tone} ${step.state === "pending" ? "animate-pulse-soft" : ""}`} />
               <span className="text-sm font-medium">{step.label}</span>
             </div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{step.detail}</p>
+            <span className="absolute right-2 top-2 text-[10px] font-mono text-muted-foreground/60">{idx + 1}</span>
           </li>
         );
       })}
@@ -119,25 +130,45 @@ function buildSteps(source: Source) {
 type StepState = "done" | "pending" | "error";
 
 function step(label: string, detail: string, state: StepState) {
-  const icon = { done: CheckCircle2, pending: Clock3, error: AlertTriangle }[state];
+  const icon = { done: CheckCircle2, pending: Loader2, error: AlertTriangle }[state];
   const tone = {
     done: "h-4 w-4 text-emerald-600",
     pending: "h-4 w-4 text-amber-600",
     error: "h-4 w-4 text-destructive",
   }[state];
-  return { label, detail, icon, tone };
+  return { label, detail, icon, tone, state };
 }
 
 function StatusBadge({ source }: { source: Source }) {
-  const workflowFailed = source.workflowStatus === "failed_fetch" || source.workflowStatus === "failed_upload";
+  const wf = source.workflowStatus;
+  const hydra = source.hydraStatus;
+  const workflowFailed = wf === "failed_fetch" || wf === "failed_upload";
+  const wfActive = wf === "extracting" || wf === "judging" || wf === "pending";
   return (
-    <div className="flex flex-col items-end gap-1">
-      <Badge variant={workflowFailed ? "destructive" : source.workflowStatus === "complete" ? "secondary" : "outline"}>
-        workflow: {source.workflowStatus}
-      </Badge>
-      <Badge variant={source.hydraStatus === "errored" ? "destructive" : "outline"}>
-        hydra: {source.hydraStatus}
-      </Badge>
+    <div className="flex flex-col items-end gap-1.5">
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+          workflowFailed
+            ? "border-destructive/40 bg-destructive/10 text-destructive"
+            : wf === "complete"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-amber-300 bg-amber-50 text-amber-700"
+        }`}
+      >
+        {wfActive ? <Clock3 className="h-3 w-3 animate-pulse-soft" /> : workflowFailed ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+        workflow · {wf}
+      </span>
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+          hydra === "errored"
+            ? "border-destructive/40 bg-destructive/10 text-destructive"
+            : hydra === "success"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-slate-300 bg-slate-50 text-slate-600"
+        }`}
+      >
+        hydra · {hydra}
+      </span>
     </div>
   );
 }
