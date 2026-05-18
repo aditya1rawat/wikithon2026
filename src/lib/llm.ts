@@ -285,7 +285,9 @@ async function retry<T>(operation: () => Promise<T>, attempts: number): Promise<
       lastError = error;
       const retryable = error instanceof ProviderError ? error.retryable : false;
       if (!retryable || attempt === attempts - 1) break;
-      await sleep(100 * (attempt + 1));
+      const isRateLimit = error instanceof ProviderError && /\b429\b/.test(error.message);
+      const backoffMs = isRateLimit ? 1500 * Math.pow(2, attempt) : 100 * (attempt + 1);
+      await sleep(backoffMs);
     }
   }
   throw lastError;

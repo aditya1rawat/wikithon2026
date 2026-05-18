@@ -154,9 +154,9 @@ function StatusBadge({ source }: { source: Source }) {
   const workflowFailed = wf === "failed_fetch" || wf === "failed_upload";
   const wfActive = wf === "extracting" || wf === "judging" || wf === "pending";
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className="flex shrink-0 flex-col items-end gap-1.5">
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${
           workflowFailed
             ? "border-destructive/40 bg-destructive/10 text-destructive"
             : wf === "complete"
@@ -168,7 +168,7 @@ function StatusBadge({ source }: { source: Source }) {
         workflow · {wf}
       </span>
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${
           hydra === "errored"
             ? "border-destructive/40 bg-destructive/10 text-destructive"
             : hydra === "success"

@@ -193,9 +193,14 @@ export async function judgeContradictionsStep(context: WorkflowContext) {
   return relations;
 }
 
+const LEDE_INTER_CALL_DELAY_MS = 750;
+
 export async function synthesizeLedesStep(context: WorkflowContext) {
   const touched = context.touchedEntityIds ?? [];
-  for (const entityId of touched) {
+  let rateLimited = false;
+  for (let i = 0; i < touched.length; i++) {
+    if (rateLimited) break;
+    const entityId = touched[i];
     const page = await store.getEntityPage(entityId, context.topic.id);
     if (!page) continue;
     const claimTexts = page.claims.map((claim) => claim.claimText);
@@ -209,9 +214,20 @@ export async function synthesizeLedesStep(context: WorkflowContext) {
         generatedAt: new Date().toISOString(),
       });
     } catch (error) {
-      console.warn(`[ingest] lede synthesis or upsert failed for ${entityId}:`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (/\b429\b/.test(message)) {
+        rateLimited = true;
+        console.warn(`[ingest] NIM rate limit hit at entity ${entityId}; skipping remaining lede synthesis this run`);
+      } else {
+        console.warn(`[ingest] lede synthesis or upsert failed for ${entityId}:`, error);
+      }
     }
+    if (i < touched.length - 1) await sleepMs(LEDE_INTER_CALL_DELAY_MS);
   }
+}
+
+function sleepMs(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function invalidateCacheStep(context: WorkflowContext) {
