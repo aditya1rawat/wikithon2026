@@ -116,7 +116,7 @@ Hydra being slow no longer blocks the local pipeline. The UI surfaces both as se
 
 ---
 
-## Features judges should poke
+## Routes
 
 ### `/` — Dashboard
 - Hero with **live topic** chip and contradictions count callout in destructive tint.
@@ -277,7 +277,7 @@ docs/superpowers/plans/            # implementation plans + audit + handoffs
 
 ---
 
-## What's working today
+## What's working now
 
 - Full ingest pipeline (fetch → normalize → Hydra upload → poll → claim extract → canonicalize → contradiction judge → lede synthesize → revalidate)
 - Stable SHA-256 ids; idempotent inserts
@@ -291,7 +291,7 @@ docs/superpowers/plans/            # implementation plans + audit + handoffs
 - E2e suite stable against live data (no demo-seed dependency)
 - 40 unit/integration tests, lint+build clean
 
-## What we'd ship next
+## Stretch Goals
 
 Pulled from the [design spec](docs/specs/2026-05-16-consensuswiki-design.md) and our own backlog:
 
@@ -305,17 +305,6 @@ Pulled from the [design spec](docs/specs/2026-05-16-consensuswiki-design.md) and
 8. **Publisher bias chip** on cited sources.
 9. **RSS poller** for continuous topic ingest.
 10. **Admin entity-merge UI** for manual canonicalization fixups.
-
----
-
-## Demo script (3 minutes)
-
-1. **0:00** Open `/`. "A wiki that shows where sources agree, disagree, and stand alone." 10 sources ingested, ~40 entities, ~50 claim relations including contradicts.
-2. **0:20** Click an entity (Anthropic). Show **Lede**, **Contested** card with side-by-side claims and LLM rationale, source excerpts pulled from Hydra recall.
-3. **1:00** `/graph`. Cytoscape view. Red contradict edges, green agree edges, dashed mention edges. Pan and zoom.
-4. **1:30** `/ingest`. Paste a fresh TechCrunch URL. Watch the timeline progress through the four steps in real time. Workflow finishes in ~5 seconds even before Hydra is done indexing.
-5. **2:15** `/query`. Ask "How is Anthropic competing with OpenAI in enterprise?" Click a numbered citation, jump to source. Scroll down to **Connections Used** — the knowledge-graph subgraph showing exactly which entities and relations informed the answer.
-6. **2:45** Refresh the original entity page. New claim appears in **Contested**, new red edge in `/graph`.
 
 ---
 
