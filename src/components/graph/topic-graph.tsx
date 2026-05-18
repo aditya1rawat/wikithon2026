@@ -27,10 +27,12 @@ export function TopicGraph({ data }: { data: GraphData }) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!ref.current) return;
+    const container = ref.current;
+    if (!container) return;
+    let cy: cytoscape.Core | null = null;
     try {
-      const cy = cytoscape({
-        container: ref.current,
+      cy = cytoscape({
+        container,
         elements: [
           ...data.nodes.map((node) => ({
             data: {
@@ -83,13 +85,26 @@ export function TopicGraph({ data }: { data: GraphData }) {
           { selector: 'edge[relation = "qualify"]', style: { "line-color": "#c47900", "target-arrow-color": "#c47900" } },
           { selector: "node:active", style: { "overlay-color": "#1554a5", "overlay-opacity": 0.15 } },
         ],
-        layout: { name: "cose", animate: false, padding: 30, idealEdgeLength: () => 110, nodeRepulsion: () => 6000 },
+        layout: { name: "concentric", animate: false, padding: 30, minNodeSpacing: 30 },
       });
-      return () => cy.destroy();
-    } catch {
+      // Re-fit after a tick in case the container started at 0 size (strict-mode mount race).
+      requestAnimationFrame(() => {
+        try {
+          cy?.resize();
+          cy?.fit(undefined, 30);
+        } catch {
+          // ignore
+        }
+      });
+    } catch (error) {
+      console.error("[topic-graph] cytoscape init failed:", error);
       queueMicrotask(() => setFailed(true));
     }
-  }, [data]);
+    return () => {
+      cy?.destroy();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.nodes.length, data.edges.length]);
 
   if (failed) return <p className="text-sm text-muted-foreground">Graph renderer unavailable. Table fallback shown below.</p>;
   return (
