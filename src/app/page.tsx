@@ -22,9 +22,6 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <section className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
         <div className="space-y-5">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium uppercase tracking-wide text-primary">
-            <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-primary" /> Live · {dashboard.topic.title}
-          </span>
           <h1 className="max-w-4xl text-4xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
             A wiki that shows where sources <span className="text-primary">agree</span>, <span className="text-destructive">disagree</span>, and stand alone.
           </h1>
