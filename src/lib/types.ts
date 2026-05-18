@@ -79,8 +79,11 @@ export interface QueryTriplet {
   hops?: number;
 }
 
+export type QueryGraphSource = "hydra" | "local";
+
 export interface QueryGraphContext {
   triplets: QueryTriplet[];
+  source: QueryGraphSource;
 }
 
 export interface SavedQuery {

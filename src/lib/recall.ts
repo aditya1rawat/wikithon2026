@@ -97,7 +97,7 @@ export async function buildLocalGraphContext(citedSourceIds: string[]): Promise<
     });
   }
   if (triplets.length === 0) return null;
-  return { triplets };
+  return { triplets, source: "local" };
 }
 
 export function extractQueryGraphContext(recall: unknown): import("./types").QueryGraphContext | null {
@@ -129,5 +129,5 @@ export function extractQueryGraphContext(recall: unknown): import("./types").Que
     });
   }
   if (triplets.length === 0) return null;
-  return { triplets };
+  return { triplets, source: "hydra" };
 }

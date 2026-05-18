@@ -27,10 +27,20 @@ export function ConnectionsUsed({ graphContext }: { graphContext: QueryGraphCont
 
   if (triplets.length === 0) return null;
 
+  const sourceLabel = graphContext?.source === "hydra" ? "HydraDB graph" : "Local fallback";
+  const sourceClass = graphContext?.source === "hydra"
+    ? "border-primary/30 bg-primary/10 text-primary"
+    : "border-amber-300 bg-amber-50 text-amber-700";
+
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">Connections used</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold">Connections used</h2>
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${sourceClass}`} title={graphContext?.source === "hydra" ? "Triplets from HydraDB graph_context" : "Triplets derived locally from Postgres claim_relations"}>
+            {sourceLabel}
+          </span>
+        </div>
         {hasBoth ? (
           <div className="inline-flex rounded-md border bg-muted/30 p-0.5 text-xs font-medium">
             <button

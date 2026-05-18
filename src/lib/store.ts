@@ -789,15 +789,24 @@ function rowToSavedQuery(row: Record<string, unknown>): SavedQuery {
 
 function parseGraphContext(value: unknown): QueryGraphContext | null {
   if (!value) return null;
+  let parsed: QueryGraphContext | null = null;
   if (typeof value === "string") {
     try {
-      return JSON.parse(value) as QueryGraphContext;
+      parsed = JSON.parse(value) as QueryGraphContext;
     } catch {
       return null;
     }
+  } else if (typeof value === "object") {
+    parsed = value as QueryGraphContext;
   }
-  if (typeof value === "object") return value as QueryGraphContext;
-  return null;
+  if (!parsed) return null;
+  if (!parsed.source) {
+    // Legacy rows: infer from predicate signature.
+    const localPredicates = new Set(["mentions", "cites", "agree", "contradict", "qualify"]);
+    const allLocal = parsed.triplets.every((t) => localPredicates.has(t.predicate));
+    parsed = { ...parsed, source: allLocal ? "local" : "hydra" };
+  }
+  return parsed;
 }
 
 function nullableString(value: unknown) {
@@ -842,6 +851,8 @@ function cloneSavedQuery(query: SavedQuery): SavedQuery {
   return {
     ...query,
     citedSourceIds: [...query.citedSourceIds],
-    graphContext: query.graphContext ? { triplets: query.graphContext.triplets.map((t) => ({ ...t })) } : null,
+    graphContext: query.graphContext
+      ? { triplets: query.graphContext.triplets.map((t) => ({ ...t })), source: query.graphContext.source }
+      : null,
   };
 }
