@@ -1,26 +1,20 @@
 import Link from "next/link";
 import { ListChecks, Search } from "lucide-react";
-import { askQuestion } from "./actions";
 import { listSavedQueries } from "@/lib/app-service";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { QueryForm } from "./query-form";
 
 export default async function QueryPage() {
   const saved = await listSavedQueries(8);
   return (
     <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Search className="h-5 w-5" /> Ask the wiki</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Search className="h-5 w-5" /> Ask the wiki</CardTitle>
+          <p className="text-sm text-muted-foreground">Synthesized answer with numbered citations + knowledge-graph trace.</p>
+        </CardHeader>
         <CardContent>
-          <form action={askQuestion} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="question">Question</Label>
-              <Textarea id="question" name="question" defaultValue="What is contested about GPT-5 release timing?" />
-            </div>
-            <Button type="submit">Synthesize and save</Button>
-          </form>
+          <QueryForm />
         </CardContent>
       </Card>
       <Card>

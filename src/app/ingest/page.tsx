@@ -1,41 +1,40 @@
-import { AlertTriangle, CheckCircle2, FileText, Loader2, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
-import { ingestSource, recheckHydra, retryIngest } from "./actions";
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
+import { recheckHydra, retryIngest } from "./actions";
+import { IngestForm } from "./ingest-form";
 import { StatusPill } from "@/components/status-pill";
 import { listSources } from "@/lib/app-service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import type { Source } from "@/lib/types";
 
 export default async function IngestPage() {
   const sources = await listSources();
+  const totals = countByWorkflow(sources);
   return (
-    <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+    <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><UploadCloud className="h-5 w-5" /> Ingest source</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><UploadCloud className="h-5 w-5" /> Ingest source</CardTitle>
+          <p className="text-sm text-muted-foreground">Paste a URL or upload a PDF. Workflow runs in the background and appears below.</p>
+        </CardHeader>
         <CardContent>
-          <form action={ingestSource} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="url">Article URL</Label>
-              <Input id="url" name="url" type="url" placeholder="https://example.com/ai-news/story" required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pdf">PDF upload</Label>
-              <Input id="pdf" name="pdf" type="file" accept="application/pdf" />
-              <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
-                <FileText className="mt-0.5 h-4 w-4 shrink-0" />
-                Text PDFs are supported in v1. Scanned PDFs without embedded text need OCR and remain a stretch item.
-              </p>
-            </div>
-            <Button type="submit">Queue ingest</Button>
-          </form>
+          <IngestForm />
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Ingest log</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>Ingest log</CardTitle>
+              <p className="text-sm text-muted-foreground">{sources.length} source{sources.length === 1 ? "" : "s"} tracked.</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 text-xs">
+              <CountChip label="complete" value={totals.complete} tone="success" />
+              <CountChip label="in flight" value={totals.inFlight} tone="info" />
+              <CountChip label="failed" value={totals.failed} tone="destructive" />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-md border border-dashed bg-muted/30 p-3 text-sm">
@@ -45,10 +44,7 @@ export default async function IngestPage() {
               <Badge variant="outline">hydra: errored</Badge>
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-muted-foreground">Failed runs keep their last completed step visible for debugging.</p>
-              <Button type="button" size="sm" variant="outline" disabled>
-                <RotateCcw className="h-4 w-4" /> Retry failed step
-              </Button>
+              <p className="text-muted-foreground">Failed runs keep their last completed step visible for debugging. Click the refresh icon next to any pill to re-check Hydra status.</p>
             </div>
           </div>
           {sources.length === 0 ? (
@@ -178,4 +174,30 @@ function needsRetry(source: Source) {
     return Date.now() - ingestedAt > STALE_PENDING_MS;
   }
   return false;
+}
+
+function countByWorkflow(sources: Source[]) {
+  let complete = 0;
+  let inFlight = 0;
+  let failed = 0;
+  for (const s of sources) {
+    if (s.workflowStatus === "complete") complete++;
+    else if (isFailed(s.workflowStatus)) failed++;
+    else inFlight++;
+  }
+  return { complete, inFlight, failed };
+}
+
+function CountChip({ label, value, tone }: { label: string; value: number; tone: "success" | "info" | "destructive" }) {
+  const styles = {
+    success: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    info: "border-amber-300 bg-amber-50 text-amber-700",
+    destructive: "border-destructive/30 bg-destructive/10 text-destructive",
+  }[tone];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium ${styles}`}>
+      <span className="tabular-nums">{value}</span>
+      <span className="uppercase tracking-wide">{label}</span>
+    </span>
+  );
 }
