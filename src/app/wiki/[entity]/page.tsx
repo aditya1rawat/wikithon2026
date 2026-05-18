@@ -13,14 +13,24 @@ export default async function EntityPage({ params }: { params: Promise<{ entity:
 
   return (
     <div className="space-y-6">
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-4xl font-semibold tracking-tight">{page.entity.canonicalName}</h1>
-          <Badge variant="secondary">{page.entity.entityType}</Badge>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">{page.entity.canonicalName}</h1>
+          <Badge variant="secondary" className="text-xs uppercase tracking-wide">{page.entity.entityType}</Badge>
         </div>
-        <p className="max-w-3xl text-lg leading-8 text-muted-foreground">
-          {page.lede?.lede ?? "No lede yet. Ingest more sources to synthesize one."}
-        </p>
+        {page.lede?.lede ? (
+          <div className="relative max-w-3xl rounded-lg border-l-4 border-primary bg-card/70 px-5 py-4 shadow-sm">
+            <Sparkles className="absolute -left-3 top-4 h-5 w-5 rounded-full bg-primary p-1 text-primary-foreground" />
+            <p className="text-lg leading-8 text-foreground/90">{page.lede.lede}</p>
+            <p className="mt-2 text-xs uppercase tracking-wide text-muted-foreground">
+              Synthesized · {page.lede.sourceCountAtGen} sources
+            </p>
+          </div>
+        ) : (
+          <p className="max-w-3xl rounded-lg border border-dashed bg-muted/30 px-5 py-4 text-sm text-muted-foreground">
+            No lede yet. Ingest more sources to synthesize one.
+          </p>
+        )}
       </section>
 
       <ClaimSection

@@ -11,23 +11,26 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <section className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
         <div className="space-y-5">
-          <h1 className="max-w-4xl text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-            A wiki that shows where sources agree, disagree, and stand alone.
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium uppercase tracking-wide text-primary">
+            <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-primary" /> Live · {dashboard.topic.title}
+          </span>
+          <h1 className="max-w-4xl text-4xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
+            A wiki that shows where sources <span className="text-primary">agree</span>, <span className="text-destructive">disagree</span>, and stand alone.
           </h1>
           <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
-            Seed topic: AI industry news. Ingest sources, extract atomic claims, surface contradictions, and watch the topic graph grow.
+            Ingest sources, extract atomic claims, surface contradictions, and watch the topic graph grow.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Button asChild><Link href="/ingest">Ingest source <ArrowRight className="h-4 w-4" /></Link></Button>
-            <Button asChild variant="outline"><Link href="/graph">Open graph</Link></Button>
+            <Button asChild size="lg"><Link href="/ingest">Ingest source <ArrowRight className="h-4 w-4" /></Link></Button>
+            <Button asChild variant="outline" size="lg"><Link href="/graph">Open graph</Link></Button>
           </div>
         </div>
-        <Card>
-          <CardHeader><CardTitle>{dashboard.topic.title}</CardTitle></CardHeader>
+        <Card className="border-primary/10 bg-gradient-to-br from-card to-primary/5 shadow-sm">
+          <CardHeader><CardTitle>Topic stats</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-3 gap-3">
             <Stat label="Entities" value={dashboard.stats.entities} />
             <Stat label="Claims" value={dashboard.stats.claims} />
-            <Stat label="Contradictions" value={dashboard.stats.contradictions} />
+            <Stat label="Contradictions" value={dashboard.stats.contradictions} tone="destructive" />
           </CardContent>
         </Card>
       </section>
@@ -71,8 +74,14 @@ export default async function DashboardPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-md border bg-muted/50 p-3"><div className="text-2xl font-semibold">{value}</div><div className="text-xs font-medium uppercase text-muted-foreground">{label}</div></div>;
+function Stat({ label, value, tone }: { label: string; value: number; tone?: "destructive" }) {
+  const valueClass = tone === "destructive" && value > 0 ? "text-destructive" : "";
+  return (
+    <div className="rounded-md border bg-background/60 p-3 backdrop-blur-sm">
+      <div className={`text-2xl font-semibold tabular-nums ${valueClass}`}>{value}</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+    </div>
+  );
 }
 
 function InfoCard({ icon: Icon, title, text }: { icon: React.ComponentType<{ className?: string }>; title: string; text: string }) {
