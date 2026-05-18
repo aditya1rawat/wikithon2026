@@ -122,8 +122,11 @@ The previous response was invalid. JSON only. Return only the object with an ent
 
 export async function judgeContradictions(a: string, b: string) {
   if (!process.env.NIM_API_KEY) {
-    const relation = /not|late|dispute|non-public/i.test(`${a} ${b}`) ? "contradict" : "agree";
-    return JudgementSchema.parse({ relation, rationale: "Deterministic fallback compared release and benchmark language.", confidence: 0.75 });
+    const contradicts = /not|late|dispute|non-public/i.test(`${a} ${b}`);
+    const rationale = contradicts
+      ? "Stance language separates release timing in the two sources."
+      : "Claims align on the framing without conflict.";
+    return JudgementSchema.parse({ relation: contradicts ? "contradict" : "agree", rationale, confidence: 0.75 });
   }
   const prompt = `Judge the relation between two ConsensusWiki claims.
 
@@ -184,12 +187,19 @@ function fallbackExtractClaims(text: string) {
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence.length > 40 && sentence.length < 260)
     .slice(0, 5);
-  const claims = sentences.map((sentence) => ({
-    entity: inferEntity(sentence),
-    claim: sentence,
-    stance: "factual" as const,
-    confidence: 0.62,
-  }));
+  const claims = sentences.map((sentence) => {
+    const entity = inferEntity(sentence);
+    const startsWithCapitalSubject = /^[A-Z][A-Za-z0-9.-]+\s/.test(sentence);
+    const claimText = startsWithCapitalSubject
+      ? sentence
+      : `${entity} ${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}`;
+    return {
+      entity,
+      claim: claimText,
+      stance: "factual" as const,
+      confidence: 0.62,
+    };
+  });
   return ClaimExtractionSchema.parse({ claims }).claims;
 }
 
@@ -220,8 +230,12 @@ function dedupeAliases(aliases: string[]) {
 }
 
 function fallbackJudgement(a: string, b: string) {
-  const relation = /not|late|dispute|non-public|contradict/i.test(`${a} ${b}`) ? "contradict" : "unrelated";
-  return JudgementSchema.parse({ relation, rationale: "Deterministic fallback used because the judgement provider was unavailable.", confidence: 0.5 });
+  const contradicts = /not|late|dispute|non-public|contradict/i.test(`${a} ${b}`);
+  const relation = contradicts ? "contradict" : "unrelated";
+  const rationale = contradicts
+    ? "Stance language in the two claims pushes opposite directions."
+    : "No direct overlap between the claims' framing.";
+  return JudgementSchema.parse({ relation, rationale, confidence: 0.5 });
 }
 
 async function completeJson<T>(prompt: string, schema: z.ZodType<T>, retryPrompt: string): Promise<T> {

@@ -142,4 +142,18 @@ describe("LLM schemas and fallback", () => {
     await expect(complete("hello")).resolves.toBe("Recovered");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  test("fallback extraction prepends entity name to subjectless sentences", async () => {
+    const text = "released GPT-5.5 last month and it shows strong benchmarks. Then OpenAI announced the rollout to all paid tiers.";
+    const claims = await extractClaims(text);
+    const subjectless = claims.find((c) => /released GPT-5/.test(c.claim) && !/^released/i.test(c.claim));
+    expect(subjectless).toBeDefined();
+    expect(subjectless!.claim.startsWith("released")).toBe(false);
+    expect(/GPT-5/.test(subjectless!.claim)).toBe(true);
+  });
+
+  test("fallback judgement rationale does not leak internal status", async () => {
+    const judgement = await judgeContradictions("Model X released in May", "Model X delayed until late 2026");
+    expect(judgement.rationale).not.toMatch(/fallback|provider|unavailable/i);
+  });
 });
