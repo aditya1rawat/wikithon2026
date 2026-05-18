@@ -565,16 +565,25 @@ export function groupClaimsForEntity({
 }
 
 function buildDashboard(snapshot: StoreSnapshot): DashboardData {
-  const contradictions = snapshot.relations.filter((relation) => relation.relation === "contradict").length;
+  const contradictPairs = new Set<string>();
+  for (const relation of snapshot.relations) {
+    if (relation.relation !== "contradict") continue;
+    contradictPairs.add([relation.claimA, relation.claimB].sort().join(":"));
+  }
+  const contradictions = contradictPairs.size;
   const entities = snapshot.entities.map((entity) => {
     const entityClaims = snapshot.claims.filter((claim) => claim.entityId === entity.id);
     const claimIds = new Set(entityClaims.map((claim) => claim.id));
+    const contestedClaimIds = new Set<string>();
+    for (const relation of snapshot.relations) {
+      if (relation.relation !== "contradict") continue;
+      if (claimIds.has(relation.claimA)) contestedClaimIds.add(relation.claimA);
+      if (claimIds.has(relation.claimB)) contestedClaimIds.add(relation.claimB);
+    }
     return {
       ...entity,
       claimCount: entityClaims.length,
-      contestedCount: snapshot.relations.filter(
-        (relation) => relation.relation === "contradict" && (claimIds.has(relation.claimA) || claimIds.has(relation.claimB))
-      ).length,
+      contestedCount: contestedClaimIds.size,
     };
   });
 
