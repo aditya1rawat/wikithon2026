@@ -32,8 +32,12 @@ export default async function DashboardPage() {
             Ingest sources, extract atomic claims, surface contradictions, and watch the topic graph grow.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Button asChild size="lg"><Link href="/ingest">Ingest source <ArrowRight className="h-4 w-4" /></Link></Button>
-            <Button asChild variant="outline" size="lg"><Link href="/graph">Open graph</Link></Button>
+            <Button asChild size="lg" className="px-6 text-base shadow-md hover:shadow-lg">
+              <Link href="/ingest">Ingest source <ArrowRight className="h-4 w-4" /></Link>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="px-6 text-base font-semibold">
+              <Link href="/graph">Open graph</Link>
+            </Button>
           </div>
         </div>
         <Card className="border-primary/10 bg-gradient-to-br from-card to-primary/5 shadow-sm">
