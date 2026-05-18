@@ -306,7 +306,7 @@ function safeRevalidatePath(path: string) {
   }
 }
 
-function mapProviderStatusToHydraStatus(status: string): HydraStatus {
+export function mapProviderStatusToHydraStatus(status: string): HydraStatus {
   switch (status) {
     case "queued":
       return "queued";
