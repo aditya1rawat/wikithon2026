@@ -86,6 +86,7 @@ Return JSON matching exactly:
 {"claims":[{"entity":"string","claim":"string","stance":"factual|opinion|prediction|leak|rumor","confidence":0.0,"evidenceQuote":"string"}]}
 
 Rules:
+- entity MUST be the proper noun name of a person, organization, product, model, or event. Never use articles ("The", "A"), conjunctions ("And", "But", "Or"), pronouns ("It", "Its", "They"), prepositions ("On", "In", "To"), or generic words ("Company", "Users", "Reporter"). If a claim does not have a clear named subject, omit it.
 - Each claim is atomic and cites exactly one entity (the subject of that claim).
 - claim MUST be a complete, self-contained sentence that stands alone without the article. It should include:
     * the subject by name (do not start with a pronoun),

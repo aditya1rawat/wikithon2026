@@ -78,11 +78,13 @@ async function main() {
   console.log(`\nDone. ok=${ok} fail=${fail} total=${sources.length}`);
 }
 
-async function quickRerun(sql: ReturnType<typeof neon>, source: SourceRow) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function quickRerun(sql: any, source: SourceRow) {
   const { normalizeUrl } = await import("@/lib/normalize-source");
   const { extractClaims, canonicalizeEntities } = await import("@/lib/llm");
   const { stableClaimId } = await import("@/lib/demo-data");
   const { slugify } = await import("@/lib/utils");
+  const { isValidEntityName } = await import("@/lib/entity-validation");
 
   const normalized = await normalizeUrl(source.url);
   const excerpt = buildBodyExcerpt(normalized.bodyText);
@@ -102,6 +104,10 @@ async function quickRerun(sql: ReturnType<typeof neon>, source: SourceRow) {
     if (!rawEntity) continue;
     const canonical = canonicalByRaw.get(rawEntity) ?? canonicals.find((c) => c.canonicalName === rawEntity);
     const canonicalName = canonical?.canonicalName ?? rawEntity;
+    if (!isValidEntityName(canonicalName)) {
+      console.warn(`  skip junk entity "${canonicalName}"`);
+      continue;
+    }
     const entityType = canonical?.entityType ?? "PRODUCT";
     const entityId = slugify(canonicalName);
 

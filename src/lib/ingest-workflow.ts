@@ -4,6 +4,7 @@ import { slugify } from "./utils";
 import { demoTopic, stableClaimId } from "./demo-data";
 import { pollHydraStatus as pollHydraProviderStatus, uploadKnowledge } from "./hydra";
 import { canonicalizeEntities, extractClaims, judgeContradictions, synthesizeLede } from "./llm";
+import { isValidEntityName } from "./entity-validation";
 import { normalizeUrl, type NormalizedSource } from "./normalize-source";
 import { store } from "./store";
 import type { Claim, ClaimRelation, Entity, HydraStatus, Source, Topic, WorkflowStatus } from "./types";
@@ -130,14 +131,19 @@ export async function extractClaimsStep(context: WorkflowContext) {
     const rawEntity = claim.entity.trim();
     if (!rawEntity) continue;
     const canonical = canonicalByRaw.get(rawEntity) ?? canonicalEntities.find((entity) => entity.canonicalName === rawEntity);
+    const canonicalName = canonical?.canonicalName ?? rawEntity;
+    if (!isValidEntityName(canonicalName)) {
+      console.warn(`[ingest] dropping claim with junk entity "${canonicalName}" from ${context.source.id}`);
+      continue;
+    }
     const aliases = [
       rawEntity,
-      canonical?.canonicalName ?? rawEntity,
+      canonicalName,
       ...(canonical?.aliases ?? []),
     ];
     const entity = await ensureEntity({
       raw: rawEntity,
-      canonicalName: canonical?.canonicalName ?? rawEntity,
+      canonicalName,
       entityType: canonical?.entityType ?? "PRODUCT",
       aliases,
       topic: context.topic,
